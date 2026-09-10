@@ -89,25 +89,18 @@ class SkeletonCLR_3views(nn.Module):
                                                **kwargs)
 
             if mlp:  # hack: brute-force replacement
-                dim_mlp = self.encoder_q.fc.weight.shape[1]
-                self.encoder_q.fc = nn.Sequential(nn.Linear(dim_mlp, dim_mlp),
-                                                  nn.ReLU(),
-                                                  self.encoder_q.fc)
-                self.encoder_k.fc = nn.Sequential(nn.Linear(dim_mlp, dim_mlp),
-                                                  nn.ReLU(),
-                                                  self.encoder_k.fc)
-                self.encoder_q_motion.fc = nn.Sequential(nn.Linear(dim_mlp, dim_mlp),
-                                                         nn.ReLU(),
-                                                         self.encoder_q.fc)
-                self.encoder_k_motion.fc = nn.Sequential(nn.Linear(dim_mlp, dim_mlp),
-                                                         nn.ReLU(),
-                                                         self.encoder_k.fc)
-                self.encoder_q_bone.fc = nn.Sequential(nn.Linear(dim_mlp, dim_mlp),
-                                                       nn.ReLU(),
-                                                       self.encoder_q.fc)
-                self.encoder_k_bone.fc = nn.Sequential(nn.Linear(dim_mlp, dim_mlp),
-                                                       nn.ReLU(),
-                                                       self.encoder_k.fc)
+                def make_mlp_head(fc):
+                    dim_mlp = fc.weight.shape[1]
+                    return nn.Sequential(nn.Linear(dim_mlp, dim_mlp),
+                                         nn.ReLU(),
+                                         fc)
+
+                self.encoder_q.fc = make_mlp_head(self.encoder_q.fc)
+                self.encoder_k.fc = make_mlp_head(self.encoder_k.fc)
+                self.encoder_q_motion.fc = make_mlp_head(self.encoder_q_motion.fc)
+                self.encoder_k_motion.fc = make_mlp_head(self.encoder_k_motion.fc)
+                self.encoder_q_bone.fc = make_mlp_head(self.encoder_q_bone.fc)
+                self.encoder_k_bone.fc = make_mlp_head(self.encoder_k_bone.fc)
 
             for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
                 param_k.data.copy_(param_q.data)    # initialize
