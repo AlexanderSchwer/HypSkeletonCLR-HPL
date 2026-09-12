@@ -30,6 +30,7 @@ from tools.hyperbolic_hierarchy import (
     sample_triplets_from_affinity,
     hierarchy_triplet_loss_hyp,
 )
+from tools.hyperbolic_geometry import make_hyperbolic_geometry, normalize_geometry_model
 from tools.pseudo_labeling import pseudo_label_mask_from_posteriors
 from tools.hyperbolic_embedding_plot import (
     DEFAULT_NEGATIVE_DISTANCE_SAMPLES,
@@ -41,7 +42,6 @@ from tools.action_label_hierarchy import hierarchy_leaf_ids
 
 import wandb
 
-import geoopt as gt
 import geoopt.manifolds.stereographic.math as pmath 
 
 CONTRASTIVE_MODES = ('augmentation', 'supervised', 'pseudo_hard', 'pseudo_soft')
@@ -74,7 +74,14 @@ class SkeletonCLR_Processor(PT_Processor):
                 self._wandb_ok = False
                 print(f"W&B disabled during init due to error: {exc}")
 
-        self.criterion = SupConLoss(temperature=self.arg.temperature, curvature=self.arg.curvature)
+        self.arg.geometry_model = normalize_geometry_model(
+            getattr(self.arg, "geometry_model", "poincare")
+        )
+        self.criterion = SupConLoss(
+            temperature=self.arg.temperature,
+            curvature=self.arg.curvature,
+            geometry_model=self.arg.geometry_model,
+        )
 
     def start(self):
         try:
@@ -301,7 +308,8 @@ class SkeletonCLR_Processor(PT_Processor):
         parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay for optimizer')
         parser.add_argument('--view', type=str, default='joint', help='the view of input')
         parser.add_argument('--temperature', type=float, default=0.07, help='the temperature used in supervised training loss')
-        parser.add_argument('--curvature', type=float, default=1.0, help='the curvature of the Poincaré ball')
+        parser.add_argument('--curvature', type=float, default=1.0, help='the positive curvature parameter for the hyperbolic backend')
+        parser.add_argument('--geometry_model', default='poincare', choices=['poincare', 'lorentz'], help='hyperbolic model used by losses and hierarchy diagnostics')
         parser.add_argument('--contrastive_mode', default=None, choices=CONTRASTIVE_MODES, help='fallback contrastive objective when contrastive_schedule is omitted')
         parser.add_argument('--contrastive_schedule', default=None, help='list of epoch phases with mode, start_epoch, end_epoch, and optional transition_epochs')
         parser.add_argument('--lambda_sink', type=float, default=1.0, help='maximum weight for Sinkhorn clustering loss')
@@ -387,6 +395,7 @@ class SkeletonCLR_Processor(PT_Processor):
                 proto_h.detach(),
                 curvature=self.arg.curvature,
                 temperature=self.arg.affinity_temperature,
+                geometry_model=self.arg.geometry_model,
             )
             self.cluster_affinity = update_affinity_ema(
                 self.cluster_affinity,
@@ -407,6 +416,7 @@ class SkeletonCLR_Processor(PT_Processor):
                     triplets,
                     curvature=self.arg.curvature,
                     margin=self.arg.hier_margin,
+                    geometry_model=self.arg.geometry_model,
                 )
                 hierarchy_triplet_accuracy = self._hierarchy_triplet_accuracy(
                     proto_h, triplets
@@ -609,6 +619,7 @@ class SkeletonCLR_Processor(PT_Processor):
                 pseudo_pair_weights,
                 distance_floor=distance_floor,
                 curvature=self.arg.curvature,
+                geometry_model=self.arg.geometry_model,
             )
             loss = loss + spread_weight * loss_spread
             metrics.update(spread_metrics)
@@ -825,8 +836,8 @@ class SkeletonCLR_Processor(PT_Processor):
                 "cluster_usage_max": usage.max().item(),
             }
             if proto_h is not None:
-                manifold = gt.PoincareBall(self.arg.curvature)
-                proto_depth = manifold.dist0(proto_h)
+                geometry = self._hyperbolic_geometry()
+                proto_depth = geometry.dist0(proto_h)
                 metrics.update({
                     "prototype_depth_mean": proto_depth.mean().item(),
                     "prototype_depth_max": proto_depth.max().item(),
@@ -960,9 +971,9 @@ class SkeletonCLR_Processor(PT_Processor):
         if proto_h is None or proto_h.numel() == 0:
             return None
         with torch.no_grad():
-            manifold = gt.PoincareBall(self.arg.curvature)
+            geometry = self._hyperbolic_geometry()
             proto_h = proto_h.to(self.dev)
-            return manifold.dist(proto_h.unsqueeze(1), proto_h.unsqueeze(0)).cpu()
+            return geometry.dist(proto_h.unsqueeze(1), proto_h.unsqueeze(0)).cpu()
 
     @staticmethod
     def _format_distance_matrix(matrix):
@@ -980,14 +991,14 @@ class SkeletonCLR_Processor(PT_Processor):
 
     def _hierarchy_triplet_accuracy(self, proto_h, triplets):
         with torch.no_grad():
-            manifold = gt.PoincareBall(self.arg.curvature)
+            geometry = self._hyperbolic_geometry()
             anchor = proto_h[triplets[:, 0]]
             positive = proto_h[triplets[:, 1]]
             negative = proto_h[triplets[:, 2]]
 
             def lca_depth(x, y):
                 return 0.5 * (
-                    manifold.dist0(x) + manifold.dist0(y) - manifold.dist(x, y)
+                    geometry.dist0(x) + geometry.dist0(y) - geometry.dist(x, y)
                 )
 
             positive_depth = lca_depth(anchor, positive)
@@ -1081,16 +1092,24 @@ class SkeletonCLR_Processor(PT_Processor):
     def _unwrap_model(self):
         return self.model.module if hasattr(self.model, "module") else self.model
 
+    def _hyperbolic_geometry(self):
+        model = self._unwrap_model()
+        geometry = getattr(model, "geometry", None)
+        if geometry is not None:
+            return geometry
+        return make_hyperbolic_geometry(
+            getattr(self.arg, "geometry_model", "poincare"),
+            self.arg.curvature,
+        )
+
     def _current_cluster_centroids(self):
         model = self._unwrap_model()
         if not getattr(model, "cluster_enabled", False) or not hasattr(model, "proto_tan"):
             return None
         with torch.no_grad():
-            proto_tan = model.proto_tan.detach()
-            proto_norm = proto_tan.norm(dim=1, keepdim=True).clamp_min(1e-12)
-            proto_tan = proto_tan * (torch.tanh(proto_norm) / proto_norm)
-            manifold = gt.PoincareBall(c=float(self.arg.curvature))
-            proto_h = manifold.projx(manifold.expmap0(proto_tan))
+            proto_h = self._hyperbolic_geometry().tangent_proto_to_manifold(
+                model.proto_tan.detach()
+            )
         return proto_h.cpu().numpy()
 
     def _embedding_plot_methods(self):
@@ -1116,6 +1135,12 @@ class SkeletonCLR_Processor(PT_Processor):
     def _render_embedding_snapshot(self, epoch, snapshot):
         if not snapshot["embeddings"]:
             print(f"Skipping embedding diagnostics for epoch {epoch}: no samples collected.")
+            return
+        if getattr(self.arg, "geometry_model", "poincare") != "poincare":
+            print(
+                "Skipping embedding diagnostics for epoch {}: plotting helpers "
+                "currently assume Poincare disk coordinates.".format(epoch)
+            )
             return
 
         embeddings = torch.cat(snapshot["embeddings"], dim=0).numpy()

@@ -349,6 +349,16 @@ def _infer_frame_count(paths):
 
 
 def _infer_geometry_impl(arg):
+    model_args = getattr(arg, 'model_args', {}) or {}
+    geometry_model = (
+        model_args.get('geometry_model') or
+        getattr(arg, 'geometry_model', None)
+    )
+    if geometry_model is not None:
+        geometry_model = str(geometry_model).lower().replace('_', '-')
+        if geometry_model in ('lorentz', 'hyperboloid'):
+            return 'lorentz'
+
     haystack = ' '.join([
         str(getattr(arg, 'config', '') or ''),
         str(getattr(arg, 'model', '') or ''),

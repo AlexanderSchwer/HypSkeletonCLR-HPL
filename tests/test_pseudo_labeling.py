@@ -419,6 +419,29 @@ class PrototypePseudoLabelingTest(unittest.TestCase):
         self.assertTrue(torch.isfinite(loss))
         self.assertTrue(torch.isfinite(raw.grad).all())
 
+    @unittest.skipUnless(HAS_GEOOPT, "geoopt is required for Lorentz SupCon")
+    def test_supcon_accepts_lorentz_features(self):
+        from tools.hyperbolic_geometry import make_hyperbolic_geometry
+        from tools.losses import SupConLoss
+
+        torch.manual_seed(0)
+        geometry = make_hyperbolic_geometry("lorentz", curvature=1.0)
+        raw = torch.randn(4, 2, 3, requires_grad=True)
+        tangent = F.normalize(raw, dim=2) * 0.2
+        features = geometry.expmap0(tangent)
+        mask = torch.eye(4)
+
+        loss = SupConLoss(
+            temperature=0.07,
+            curvature=1.0,
+            geometry_model="lorentz",
+        )(features, mask=mask)
+        loss.backward()
+
+        self.assertEqual(tuple(features.shape), (4, 2, 4))
+        self.assertTrue(torch.isfinite(loss))
+        self.assertTrue(torch.isfinite(raw.grad).all())
+
     @unittest.skipUnless(HAS_GEOOPT, "geoopt is required for hyperbolic distance floor")
     def test_pseudo_cluster_distance_floor_loss_pushes_too_close_pairs(self):
         import geoopt
