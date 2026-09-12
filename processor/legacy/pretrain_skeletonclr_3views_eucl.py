@@ -18,9 +18,9 @@ from torchlight import str2bool
 from torchlight import DictAction
 from torchlight import import_class
 
-from .processor import Processor
-from .pretrain import PT_Processor, add_lr_scheduler_args
-from .wandb_utils import init_wandb_from_work_dir
+from processor.processor import Processor
+from processor.pretrain import PT_Processor, add_lr_scheduler_args
+from processor.wandb_utils import init_wandb_from_work_dir
 
 import wandb
 

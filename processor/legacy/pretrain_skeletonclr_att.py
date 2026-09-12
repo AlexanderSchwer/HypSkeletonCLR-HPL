@@ -18,15 +18,80 @@ from torchlight import str2bool
 from torchlight import DictAction
 from torchlight import import_class
 
-from .processor import Processor
-from .pretrain import PT_Processor, add_lr_scheduler_args
-from .wandb_utils import init_wandb_from_work_dir
+from processor.processor import Processor
+from processor.pretrain import PT_Processor, add_lr_scheduler_args
+from processor.wandb_utils import init_wandb_from_work_dir
 
-from tools.losses_eucl import SupConLoss
+from tools.losses import SupConLoss
 
 import wandb
 
-class SkeletonCLR_Processor(PT_Processor):
+import geoopt as gt
+import geoopt.manifolds.stereographic.math as pmath 
+
+from scipy.cluster.hierarchy import linkage, fcluster
+from sklearn.cluster import KMeans
+
+
+def generate_pseudo_labels_from_attention(sp_attns, tp_attns, num_clusters):
+        """
+        Generate pseudo-labels using hierarchical clustering (Ward) on combined spatial
+        and temporal attention maps.
+
+        Args:
+            sp_attns: list of spatial attention tensors, each of shape (N, heads, T, V, V)
+            tp_attns: list of temporal attention tensors, each of shape (N, heads, V, T, T)
+            num_clusters: int, number of clusters to form
+
+        Returns:
+            pseudo_labels: np.ndarray, shape (N,) with cluster assignments
+        """
+
+        all_features = []
+
+        # 1) Concatenate attention maps from all layers
+        if isinstance(sp_attns[0], list):
+            sp_attns = [item for sublist in sp_attns for item in sublist]
+        if isinstance(tp_attns[0], list):
+            tp_attns = [item for sublist in tp_attns for item in sublist]
+
+        for sp_att, tp_att in zip(sp_attns, tp_attns):
+            # split batch into two views
+            N = sp_att.shape[0]
+            half = N // 2
+            sp_pooled1 = sp_att[:half].mean(dim=(1,2,4))
+            sp_pooled2 = sp_att[half:].mean(dim=(1,2,4))
+            tp_pooled1 = tp_att[:half].mean(dim=(1,3,4))
+            tp_pooled2 = tp_att[half:].mean(dim=(1,3,4))
+
+            # average the two views
+            sp_pooled = (sp_pooled1 + sp_pooled2) / 2
+            tp_pooled = (tp_pooled1 + tp_pooled2) / 2
+
+            combined = torch.cat([sp_pooled, tp_pooled], dim=1)
+            all_features.append(combined)
+
+        if len(all_features) == 0:
+            raise ValueError("No attention layers with matching shape found!")
+
+        # Stack features from all layers → (N, 500)
+        features = torch.cat(all_features, dim=1).cpu().numpy()
+        
+       # 2) Hierarchical clustering with Ward linkage
+        #Z = linkage(features, method='ward')
+        
+        # 3) Cut dendrogram to form clusters
+        #cluster_labels = fcluster(Z, t=num_clusters, criterion='maxclust')
+
+        Q = 10
+        kmeans = KMeans(n_clusters=Q, random_state=0, n_init=10).fit(features)
+        pseudo_lbls = kmeans.labels_ 
+
+        cluster_labels = pseudo_lbls               
+        
+        return cluster_labels
+
+class SkeletonCLR_Att_Processor(PT_Processor):
     """
         Processor for SkeletonCLR Pretraining.
     """
@@ -40,8 +105,8 @@ class SkeletonCLR_Processor(PT_Processor):
             config=vars(self.arg),
         )
 
-        self.criterion = SupConLoss(temperature=self.arg.temperature)
-
+        self.criterion = SupConLoss(temperature=self.arg.temperature, curvature=self.arg.curvature)
+        
     def train(self, epoch):
         self.model.train()
         self.adjust_lr()
@@ -51,15 +116,9 @@ class SkeletonCLR_Processor(PT_Processor):
         wandb.watch(self.model)
         # wandb.watch(self.model, log="all") # for logging of parameters panels
 
-        label_mapping = {0: 0, 1: 1, 2: 0, 3: 1, 4: 0, 5: 1, 6: 0, 7: 1, 8: 0, 9: 1,
-                        10: 0, 11: 1, 12: 0, 13: 1, 14: 0, 15: 1, 16: 0, 17: 1, 18: 0, 19: 1,
-                        20: 0, 21: 1, 22: 0, 23: 1, 24: 0, 25: 1, 26: 0, 27: 1, 28: 0, 29: 1,
-                        30: 0, 31: 1, 32: 0, 33: 1, 34: 0, 35: 1, 36: 0, 37: 1, 38: 0, 39: 1,
-                        40: 0, 41: 1, 42: 0, 43: 1, 44: 0, 45: 1, 46: 0, 47: 1, 48: 0, 49: 1,
-                        50: 0, 51: 1, 52: 0, 53: 1, 54: 0, 55: 1, 56: 0, 57: 1, 58: 0, 59: 1}
-
         for [data1, data2], label in loader:
             self.global_step += 1
+
             # get data
             data1 = data1.float().to(self.dev, non_blocking=True)
             data2 = data2.float().to(self.dev, non_blocking=True)
@@ -95,33 +154,24 @@ class SkeletonCLR_Processor(PT_Processor):
 
             # forward
             if epoch < self.arg.sup_epoch:
-                output, target, _ = self.model(data1, data2)
+                output, target, _, _, _ = self.model(data1, data2)
                 if hasattr(self.model, 'module'):
                     self.model.module.update_ptr(output.size(0))
                 else:
                     self.model.update_ptr(output.size(0))
                 loss = self.loss(output, target)
             else:
-                output, target, features_sup = self.model(data1, data2)
+                output, target, features_sup, sp_att, tp_att = self.model(data1, data2)
                 if hasattr(self.model, 'module'):
                     self.model.module.update_ptr(output.size(0))
                 else:
                     self.model.update_ptr(output.size(0))
+                # Generate pseudo-labels (example: 10 clusters)
+                pseudo_labels = generate_pseudo_labels_from_attention(sp_att, tp_att, num_clusters=10)
+                pseudo_labels = torch.tensor(pseudo_labels, device=self.dev, dtype=torch.long)
                 
-                #loss_unsup = self.loss(output, target)
-                
-                try:
-                    label_sup = torch.tensor([label_mapping[int(l)] for l in label])
-                except NameError:
-                    label_sup = label
-                    
-                loss_sup = self.criterion(features_sup, label_sup)
-                
-                # new loss function: scaled sum of unsupervised and supervised loss
-                #alpha = (epoch - self.arg.sup_epoch) / (self.arg.num_epoch - self.arg.sup_epoch)
                 alpha = 1.0
-                #loss = (1 - alpha) * loss_unsup + alpha * loss_sup
-                loss = loss_sup
+                loss = self.criterion(features_sup, pseudo_labels)
 
             # backward
             self.optimizer.zero_grad()
@@ -185,6 +235,7 @@ class SkeletonCLR_Processor(PT_Processor):
         parser.add_argument('--view', type=str, default='joint', help='the view of input')
         parser.add_argument('--sup_epoch', type=int, default=1e6, help='the starting epoch of supervised training')
         parser.add_argument('--temperature', type=float, default=0.07, help='the temperature used in supervised training loss')
+        parser.add_argument('--curvature', type=float, default=1.0, help='the curvature of the Poincaré ball')
         
         # endregion yapf: enable
 

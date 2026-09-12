@@ -18,13 +18,13 @@ from torchlight import str2bool
 from torchlight import DictAction
 from torchlight import import_class
 
-from .processor import Processor
-from .pretrain import PT_Processor, add_lr_scheduler_args
+from processor.processor import Processor
+from processor.pretrain import PT_Processor, add_lr_scheduler_args
 
 
-class CrosSCLR_Processor(PT_Processor):
+class CrosSCLR_3views_Processor(PT_Processor):
     """
-        Processor for CrosSCLR Pretraining.
+        Processor for 3view-CrosSCLR Pretraining.
     """
 
     def train(self, epoch):
@@ -33,6 +33,7 @@ class CrosSCLR_Processor(PT_Processor):
         loader = self.data_loader['train']
         loss_value = []
         loss_motion_value = []
+        loss_bone_value = []
 
         for [data1, data2], label in loader:
             self.global_step += 1
@@ -43,35 +44,48 @@ class CrosSCLR_Processor(PT_Processor):
 
             # forward
             if epoch <= self.arg.cross_epoch:
-                output, output_motion, target = self.model(data1, data2)
+                output, output_motion, output_bone, target = self.model(data1, data2)
                 if hasattr(self.model, 'module'):
                     self.model.module.update_ptr(output.size(0))
                 else:
                     self.model.update_ptr(output.size(0))
                 loss = self.loss(output, target)
                 loss_motion = self.loss(output_motion, target)
+                loss_bone = self.loss(output_bone, target)
 
                 self.iter_info['loss'] = loss.data.item()
                 self.iter_info['loss_motion'] = loss_motion.data.item()
+                self.iter_info['loss_bone'] = loss_bone.data.item()
                 loss_value.append(self.iter_info['loss'])
                 loss_motion_value.append(self.iter_info['loss_motion'])
-                loss = loss + loss_motion
+                loss_bone_value.append(self.iter_info['loss_bone'])
+                loss = loss + loss_motion + loss_bone
             else:
-                output, output_motion, mask, mask_motion = self.model(data1, data2, cross=True, topk=self.arg.topk, context=self.arg.context)
+                output_jm, output_jb, output_mj, output_mb, output_bj, output_bm, mask_jm, mask_jb, mask_mj, mask_mb, mask_bj, mask_bm = self.model(data1, data2, cross=True, topk=self.arg.topk, context=self.arg.context)
                 if hasattr(self.model, 'module'):
-                    self.model.module.update_ptr(output.size(0))
+                    self.model.module.update_ptr(output_jm.size(0))
                 else:
-                    self.model.update_ptr(output.size(0))
-                loss = - (F.log_softmax(output, dim=1) * mask).sum(1) / mask.sum(1)
-                loss_motion = - (F.log_softmax(output_motion, dim=1) * mask_motion).sum(1) / mask_motion.sum(1)
+                    self.model.update_ptr(output_jm.size(0))
+                loss_jm = - (F.log_softmax(output_jm, dim=1) * mask_jm).sum(1) / mask_jm.sum(1)
+                loss_jb = - (F.log_softmax(output_jb, dim=1) * mask_jb).sum(1) / mask_jb.sum(1)
+                loss_mj = - (F.log_softmax(output_mj, dim=1) * mask_mj).sum(1) / mask_mj.sum(1)
+                loss_mb = - (F.log_softmax(output_mb, dim=1) * mask_mb).sum(1) / mask_mb.sum(1)
+                loss_bj = - (F.log_softmax(output_bj, dim=1) * mask_bj).sum(1) / mask_bj.sum(1)
+                loss_bm = - (F.log_softmax(output_bm, dim=1) * mask_bm).sum(1) / mask_bm.sum(1)
+                loss = (loss_jm + loss_jb) / 2.
+                loss_motion = (loss_mj + loss_mb) / 2.
+                loss_bone = (loss_bj + loss_bm) / 2.
                 loss = loss.mean()
                 loss_motion = loss_motion.mean()
+                loss_bone = loss_bone.mean()
 
                 self.iter_info['loss'] = loss.data.item()
                 self.iter_info['loss_motion'] = loss_motion.data.item()
+                self.iter_info['loss_bone'] = loss_bone.data.item()
                 loss_value.append(self.iter_info['loss'])
                 loss_motion_value.append(self.iter_info['loss_motion'])
-                loss = loss + loss_motion
+                loss_bone_value.append(self.iter_info['loss_bone'])
+                loss = loss + loss_motion + loss_bone
 
             # backward
             self.optimizer.zero_grad()
@@ -84,11 +98,14 @@ class CrosSCLR_Processor(PT_Processor):
             self.meta_info['iter'] += 1
             self.train_log_writer(epoch)
             self.train_writer.add_scalar('batch_loss_motion', self.iter_info['loss_motion'], self.global_step)
+            self.train_writer.add_scalar('batch_loss_bone', self.iter_info['loss_bone'], self.global_step)
 
         self.epoch_info['train_mean_loss']= np.mean(loss_value)
         self.epoch_info['train_mean_loss_motion']= np.mean(loss_motion_value)
+        self.epoch_info['train_mean_loss_bone']= np.mean(loss_bone_value)
         self.train_writer.add_scalar('loss', self.epoch_info['train_mean_loss'], epoch)
         self.train_writer.add_scalar('loss_motion', self.epoch_info['train_mean_loss_motion'], epoch)
+        self.train_writer.add_scalar('loss_bone', self.epoch_info['train_mean_loss_bone'], epoch)
         self.show_epoch_info()
 
     @staticmethod

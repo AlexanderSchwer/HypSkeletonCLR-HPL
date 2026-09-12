@@ -176,7 +176,7 @@ class TrainingWorkDirTest(unittest.TestCase):
     def test_canonical_omits_geometry_and_curvature_for_euclidean_run(self):
         arg = Namespace(
             work_dir='work_dir/skeletonclr',
-            config='config/SkeletonCLR/skeletonclr_eucl_3views_xview.yaml',
+            config='config/legacy/SkeletonCLR/skeletonclr_eucl_3views_xview.yaml',
             model='net.skeletonclr_3views_eucl.SkeletonCLR_3views_Eucl',
             model_args={'num_class': 60, 'hidden_channels': 16, 'curvature': 1.0},
             train_feeder_args={'data_path': 'xview/train_position.npy'},

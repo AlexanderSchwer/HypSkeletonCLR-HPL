@@ -24,8 +24,8 @@ from torchlight import str2bool
 from torchlight import DictAction
 from torchlight import import_class
 
-from .processor import Processor
-from .pretrain import PT_Processor, add_lr_scheduler_args
+from processor.processor import Processor
+from processor.pretrain import PT_Processor, add_lr_scheduler_args
 
 from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.manifold import TSNE

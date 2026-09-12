@@ -16,11 +16,12 @@ from torchlight import str2bool
 from torchlight import DictAction
 from torchlight import import_class
 
-from .processor import Processor
-from .lr_scheduler import LRSchedulerMixin, add_lr_scheduler_args
-from .wandb_utils import init_wandb_from_work_dir
+from processor.processor import Processor
+from processor.lr_scheduler import LRSchedulerMixin, add_lr_scheduler_args
+from processor.wandb_utils import init_wandb_from_work_dir
 
 import geoopt as gt
+import geoopt.manifolds.stereographic.math as pmath 
 
 import wandb
 
@@ -28,60 +29,6 @@ from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-def visualize_latent_space(features, labels, method='pca', n_components=2, random_state=42, save_path=None, selected_labels=None):
-
-    features = np.concatenate(features, axis=0)
-    labels = np.concatenate(labels, axis=0)
-
-    # Filter features and labels for selected actions
-    if selected_labels is not None:
-        mask = np.isin(labels, selected_labels)
-        features = features[mask]
-        labels = labels[mask]
-
-    if method == 'pca':
-        reducer = PCA(n_components=n_components, random_state=random_state)
-    elif method == 'svd':
-        reducer = TruncatedSVD(n_components=n_components, random_state=random_state)
-    elif method == 'tsne':
-        reducer = TSNE(n_components=n_components, random_state=random_state)
-    else:
-        raise ValueError("Unsupported method. Choose either 'pca', 'svd' or 'tsne'.")
-
-    reduced_features = reducer.fit_transform(features)
-
-    # Create a scatter plot
-    plt.figure(figsize=(8, 6))
-    palette = sns.color_palette("tab10", len(np.unique(labels)))
-    sns.scatterplot(
-        x=reduced_features[:, 0],
-        y=reduced_features[:, 1],
-        hue=labels,
-        palette=palette,
-        legend=True,
-        alpha=0.7
-    )
-    if method == 'pca':
-        plt.title(f"PCA of Model Output Features")
-        plt.xlabel("Principal Component 1")
-        plt.ylabel("Principal Component 2")
-    
-    elif method == 'svd':
-        plt.title(f"SVD of Model Output Features")
-        plt.xlabel("Singular Value 1")
-        plt.ylabel("Singular Value 2")
-    
-    elif method == 'tsne':
-        plt.title(f"t-SNE of Model Output Features")
-        plt.xlabel("t-SNE 1")
-        plt.ylabel("t-SNE 2")
-    # Save the plot if a save path is provided
-    if save_path:
-        plt.savefig(save_path, format='png', dpi=300, bbox_inches='tight')
-        print(f"Plot saved to {save_path}")
-    
-    plt.show()
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -180,14 +127,18 @@ class LE_Processor(LRSchedulerMixin, Processor):
         loader = self.data_loader['train']
         loss_value = []
 
+        #poincare_ball = gt.PoincareBall(self.arg.curvature)
+
         for data, label in loader:
             self.global_step += 1
             # get data
             data = data.float().to(self.dev, non_blocking=True)
             label = label.long().to(self.dev, non_blocking=True)
 
+            #data = poincare_ball.expmap0(data)
+
             # forward
-            output = self.model(data, view=self.arg.view)
+            output, _, _ = self.model(data, view=self.arg.view)
             loss = self.loss(output, label)
 
             # backward
@@ -228,35 +179,28 @@ class LE_Processor(LRSchedulerMixin, Processor):
         loss_value = []
         result_frag = []
         label_frag = []
-        features = []
 
-        poincare_ball = gt.PoincareBall(1.0) # to-do: get curvature from config file
+        #poincare_ball = gt.PoincareBall(self.arg.curvature)
 
         for data, label in loader:
             # get data
             data = data.float().to(self.dev, non_blocking=True)
             label = label.long().to(self.dev, non_blocking=True)
 
+            #data = poincare_ball.expmap0(data)
+
             # inference
             with torch.no_grad():
-                output = self.model(data, view=self.arg.view)
-                latent_features = self.model.encoder_q(data)  # Extract latent features
-                latent_features = poincare_ball.expmap0(latent_features)
-                features.append(latent_features.cpu().numpy())
+                output, _, _ = self.model(data, view=self.arg.view)
             result_frag.append(output.data.cpu().numpy())
 
             # get loss
             loss = self.loss(output, label)
             loss_value.append(loss.item())
             label_frag.append(label.data.cpu().numpy())
-
+        
         self.result = np.concatenate(result_frag)
         self.label = np.concatenate(label_frag)
-
-        features = np.concatenate(features)
-
-        self.all_features.append(features)
-        self.all_labels.append(self.label)
 
         self.eval_info['eval_mean_loss']= np.mean(loss_value)
         self.show_eval_info()
@@ -273,18 +217,6 @@ class LE_Processor(LRSchedulerMixin, Processor):
             step=self.global_step)
         
         self.eval_log_writer(epoch)
-
-        if epoch == 5 or epoch == 50 or epoch == 100: # to-do: take last eval epoch from config
-            print("Last epoch reached! Generating plots with model output features...")
-            save_path_svd = f"latent_space_svd_{epoch}.png"
-            save_path_pca = f"latent_space_pca_{epoch}.png"
-            save_path_tsne = f"latent_space_tsne_{epoch}.png"
-
-            #selected_labels = [0, 5, 11, 17, 23, 29, 35, 41, 47, 53]
-            selected_labels = [0, 5, 11, 17, 23, 26, 34, 35, 43, 54]
-            visualize_latent_space(self.all_features, self.all_labels, method='svd', save_path=save_path_svd, selected_labels=selected_labels)
-            visualize_latent_space(self.all_features, self.all_labels, method='pca', save_path=save_path_pca, selected_labels=selected_labels)
-            visualize_latent_space(self.all_features, self.all_labels, method='tsne', save_path=save_path_tsne, selected_labels=selected_labels)
 
     @staticmethod
     def get_parser(add_help=False):
@@ -310,6 +242,8 @@ class LE_Processor(LRSchedulerMixin, Processor):
         parser.add_argument('--cross_epoch', type=int, default=1e6, help='the starting epoch of cross-view training')
         parser.add_argument('--context', type=str2bool, default=True, help='using context knowledge')
         parser.add_argument('--topk', type=int, default=1, help='topk samples in cross-view training')
+        parser.add_argument('--curvature', type=float, default=1.0, help='the curvature of the Poincaré ball')
+        
         # endregion yapf: enable
 
         return parser

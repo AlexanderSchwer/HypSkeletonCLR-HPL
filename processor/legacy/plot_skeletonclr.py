@@ -10,8 +10,8 @@ import torch.nn.functional as F
 
 from torchlight import DictAction, str2bool
 
-from .processor import Processor
-from .pretrain import PT_Processor, add_lr_scheduler_args
+from processor.processor import Processor
+from processor.pretrain import PT_Processor, add_lr_scheduler_args
 from tools.hyperbolic_embedding_plot import (
     DEFAULT_HYP_TSNE_CHUNK_SIZE,
     DEFAULT_HYP_TSNE_EXAGGERATION_ITER,
