@@ -1,4 +1,4 @@
-work_dir: work_dir/skeletonclr/1_xsub_frame50_channel16_epoch300_cross50/3views_c005_cosann_hyp_pseudo_supcon
+work_dir: work_dir/skeletonclr/1_xsub_frame50_channel16_epoch300_cross50/3views_c040_cosann_hyp_pseudo_supcon
 
 #weights: work_dir/skeletonclr/1_xsub_frame50_channel16_epoch300_cross50/unsupervised/epoch50_model.pt
 #ignore_weights: [encoder_q.fc, encoder_q_motion.fc, encoder_q_bone.fc, encoder_k, encoder_k_motion, encoder_k_bone, queue, queue_motion, queue_bone]
@@ -34,7 +34,7 @@ model_args:
   edge_importance_weighting: True
   curvature: 1.0
   cluster_enabled: True
-  num_clusters: 5
+  num_clusters: 40
   sinkhorn_tau: 0.1
   sinkhorn_iters: 20
   sinkhorn_eps: 0.05
@@ -61,13 +61,9 @@ view: 'all'
 
 # contrastive training
 contrastive_schedule:
-  - mode: augmentation
-    start_epoch: 1
-    end_epoch: 50
   - mode: pseudo_soft
-    start_epoch: 51
+    start_epoch: 1
     end_epoch: 300
-    transition_epochs: 20
     lambda_aug: 1.0
     lambda_pseudo: 0.2
 temperature: 0.07
