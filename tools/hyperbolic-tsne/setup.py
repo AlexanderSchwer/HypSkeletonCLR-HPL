@@ -10,17 +10,11 @@ from os.path import join
 
 import setuptools
 from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext
 
 ########################
 # TODO: Taken from https://github.com/pavlin-policar/openTSNE/blob/master/setup.py
 ########################
-
-try:
-    from Cython.Distutils.build_ext import new_build_ext as build_ext
-    have_cython = True
-except ImportError:
-    have_cython = False
-
 
 class get_numpy_include:
     """Helper class to determine the numpy include path
@@ -94,9 +88,6 @@ def has_c_library(library, extension=".c"):
 
 class CythonBuildExt(build_ext):
     def build_extensions(self):
-        if not have_cython:
-            raise RuntimeError("Missing build dependency: Cython")
-
         extra_compile_args = []
         extra_link_args = []
 
@@ -168,10 +159,10 @@ class CythonBuildExt(build_ext):
 
 extensions = [
     Extension("hyperbolicTSNE.hyperbolic_barnes_hut.tsne_utils",
-              sources=["hyperbolicTSNE/hyperbolic_barnes_hut/tsne_utils.pyx"],
+              sources=["hyperbolicTSNE/hyperbolic_barnes_hut/tsne_utils.cpp"],
               language="c++"),
     Extension("hyperbolicTSNE.hyperbolic_barnes_hut.tsne",
-              sources=["hyperbolicTSNE/hyperbolic_barnes_hut/tsne.pyx"],
+              sources=["hyperbolicTSNE/hyperbolic_barnes_hut/tsne.cpp"],
               language="c++"),
 ]
 
@@ -214,9 +205,6 @@ setup(
         "scikit-learn>=0.20",
         "scipy",
         "tqdm"
-    ],
-    setup_requires=[
-        "cython",
     ],
     extras_require={
         "plot": [

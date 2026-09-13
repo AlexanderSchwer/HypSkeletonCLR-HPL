@@ -1,6 +1,7 @@
 wheel
 numpy==1.24.4
-opencv_python==4.9.0.80
+torch
+opencv-python==4.9.0.80
 PyYAML==6.0.1
 h5py==3.11.0
 tensorboardX==2.6.2.2
@@ -9,4 +10,10 @@ scipy==1.10.1
 scikit-learn
 matplotlib
 seaborn
+pandas
+tqdm
+hnswlib
 wandb
+pytest
+-e ./torchlight
+-e ./tools/hyperbolic-tsne

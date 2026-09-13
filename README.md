@@ -7,30 +7,27 @@ The Official PyTorch implementation of **"3D Human Action Representation Learnin
 </div>
 
 ## Requirements
-We only test our code on the following environment:
-  - Python == 3.8.2
-  - PyTorch == 1.4.0
-  - CUDA == 11.1
+This project is maintained with the dependencies listed in `requirements.txt`.
+The current local environment uses:
+  - Python == 3.11.9
+  - NumPy == 1.24.4
+  - SciPy == 1.10.1
+  - OpenCV Python == 4.9.0.80
+
+PyTorch is installed through `requirements.txt`. For GPU training, use a PyTorch
+build compatible with your local CUDA driver/runtime.
 
 ## Installation
   ```bash
   # Install python environment
-  $ conda create -n crossclr python=3.8.2
+  $ conda create -n crossclr python=3.11
   $ conda activate crossclr
-
-  # Install PyTorch
-  $ pip install torch==1.4.0
 
   # Download our code
   $ git clone https://github.com/LinguoLi/CrosSCLR.git
   $ cd CrosSCLR
 
-  # Install torchlight
-  $ cd torchlight
-  $ python setup.py install
-  $ cd ..
-
-  # Install other python libraries
+  # Install Python libraries and local editable packages
   $ pip install -r requirements.txt
   ```
 
