@@ -1,32 +1,12 @@
 #!/usr/bin/env python
 import argparse
 import sys
-import os
-import shutil
-import zipfile
-import time
 
 from torchlight import import_class
 
 from processor.processor import init_seed
 from processor.registry import LEGACY_PROCESSORS, PROCESSORS
 init_seed(0)
-
-def save_src(target_path):
-    code_root = os.getcwd()
-    srczip = zipfile.ZipFile('./src.zip', 'w')
-    for root, dirnames, filenames in os.walk(code_root):
-            for filename in filenames:
-                if filename.split('\n')[0].split('.')[-1] == 'py':
-                    srczip.write(os.path.join(root, filename).replace(code_root, '.'))
-                if filename.split('\n')[0].split('.')[-1] == 'yaml':
-                    srczip.write(os.path.join(root, filename).replace(code_root, '.'))
-                if filename.split('\n')[0].split('.')[-1] == 'ipynb':
-                    srczip.write(os.path.join(root, filename).replace(code_root, '.'))
-    srczip.close()
-    save_path = os.path.join(target_path, 'src_%s.zip' % time.strftime("%Y-%m-%d_%H_%M_%S", time.localtime()))
-    shutil.copy('./src.zip', save_path)
-
 
 if __name__ == '__main__':
 
@@ -53,7 +33,6 @@ if __name__ == '__main__':
     p = Processor(sys.argv[2:])
 
     if p.arg.phase == 'train':
-        # save src
-        save_src(p.arg.work_dir)
+        p.save_src()
 
     p.start()

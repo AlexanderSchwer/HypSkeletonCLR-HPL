@@ -2,6 +2,9 @@
 # pylint: disable=W0201
 import sys
 import argparse
+import os
+import time
+import zipfile
 import yaml
 import numpy as np
 
@@ -64,6 +67,20 @@ class IO():
             self.dev = "cuda:0"
         else:
             self.dev = "cpu"
+
+    def save_src(self):
+        """Archive source files and configs directly in this run's work directory."""
+        code_root = os.getcwd()
+        save_path = os.path.join(
+            self.arg.work_dir,
+            'src_%s.zip' % time.strftime('%Y-%m-%d_%H_%M_%S'),
+        )
+        with zipfile.ZipFile(save_path, 'w') as srczip:
+            for root, _, filenames in os.walk(code_root):
+                for filename in filenames:
+                    if filename.endswith(('.py', '.yaml', '.ipynb')):
+                        source_path = os.path.join(root, filename)
+                        srczip.write(source_path, arcname=os.path.relpath(source_path, code_root))
 
     def load_model(self):
         self.model = self.io.load_model(self.arg.model,
