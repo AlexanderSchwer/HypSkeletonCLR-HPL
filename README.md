@@ -226,6 +226,4 @@ please cite the accompanying bachelor thesis:
   Consistency Pursuit".
 - The original framework is based on the old version of
   [ST-GCN](https://github.com/yysijie/st-gcn/blob/master/OLD_README.md).
-- [Awesome-Skeleton-based-Action-Recognition](https://github.com/niais/Awesome-Skeleton-based-Action-Recognition)
-- [mv-ignet](https://github.com/niais/mv-ignet)
 - [NTURGB-D](https://github.com/shahroudy/NTURGB-D)
