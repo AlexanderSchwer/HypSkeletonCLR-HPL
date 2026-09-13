@@ -1,6 +1,5 @@
 import geoopt
 import torch
-import torch.nn.functional as F
 
 # InfoNCE for first 150 epochs
 def hyperbolic_infoNCE_loss(u, v, negatives, temperature=0.1):

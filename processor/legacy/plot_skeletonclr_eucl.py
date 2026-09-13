@@ -1,23 +1,15 @@
 #!/usr/bin/env python
 # pylint: disable=W0201
-import sys
 import argparse
 import os
-import yaml
-import math
 import numpy as np
 
 # torch
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 
 # torchlight
-import torchlight
 from torchlight import str2bool
-from torchlight import DictAction
-from torchlight import import_class
 
 from processor.processor import Processor
 from processor.pretrain import PT_Processor, add_lr_scheduler_args
@@ -26,7 +18,7 @@ from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.preprocessing import normalize, StandardScaler
+from sklearn.preprocessing import normalize
 
 def visualize_latent_space(features, labels, method='pca', n_components=2, random_state=42, save_path=None, selected_labels=None):
     

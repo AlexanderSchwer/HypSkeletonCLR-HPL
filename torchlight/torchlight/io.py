@@ -8,12 +8,8 @@ import warnings
 import pickle
 from collections import OrderedDict
 import yaml
-import numpy as np
 # torch
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.autograd import Variable
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore",category=FutureWarning)

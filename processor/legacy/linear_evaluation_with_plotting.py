@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # pylint: disable=W0201
-import sys
 import argparse
-import yaml
 import numpy as np
 
 # torch
@@ -11,10 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 # torchlight
-import torchlight
 from torchlight import str2bool
-from torchlight import DictAction
-from torchlight import import_class
 
 from processor.processor import Processor
 from processor.lr_scheduler import LRSchedulerMixin, add_lr_scheduler_args

@@ -1,10 +1,8 @@
 import os
 import sys
-import pickle
 
 import torch
 import argparse
-import numpy as np
 from numpy.lib.format import open_memmap
 from NTUDatasets import NTUMotionProcessor
 

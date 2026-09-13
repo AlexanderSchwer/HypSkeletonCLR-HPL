@@ -10,14 +10,10 @@ import numpy as np
 
 # torch
 import torch
-import torch.nn as nn
-import torch.optim as optim
 
 # torchlight
-import torchlight
 from torchlight import str2bool
 from torchlight import DictAction
-from torchlight import import_class
 
 from .processor import Processor
 from .pretrain import PT_Processor, add_lr_scheduler_args
@@ -42,7 +38,6 @@ from tools.action_label_hierarchy import hierarchy_leaf_ids
 
 import wandb
 
-import geoopt.manifolds.stereographic.math as pmath 
 
 CONTRASTIVE_MODES = ('augmentation', 'supervised', 'pseudo_hard', 'pseudo_soft')
 

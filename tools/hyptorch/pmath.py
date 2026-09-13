@@ -3,7 +3,6 @@ Implementation of various mathematical operations in the Poincare ball model of 
 functions are based on the implementation in https://github.com/geoopt/geoopt (copyright by Maxim Kochurov).
 """
 
-import numpy as np
 import torch
 #from scipy.special import gamma
 

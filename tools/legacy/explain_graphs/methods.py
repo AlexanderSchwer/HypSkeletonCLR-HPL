@@ -1,7 +1,5 @@
 import numpy as np
-import keras.models 
 from keras.models import Model
-import matplotlib.pyplot as plt
 import keras.backend as K
 
 

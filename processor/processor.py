@@ -1,17 +1,12 @@
 #!/usr/bin/env python
 # pylint: disable=W0201
-import sys
 import argparse
-import yaml
 import os
 import numpy as np
 import random
-import math
 
 # torch
 import torch
-import torch.nn as nn
-import torch.optim as optim
 
 # torchlight
 import torchlight

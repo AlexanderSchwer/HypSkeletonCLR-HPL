@@ -1,15 +1,11 @@
-import os
 import time
-import pickle
 import numpy as np
 import scipy.sparse as sp
-import matplotlib.pyplot as plt
 
 from keras import metrics
 from keras import backend as K
 from keras.models import Model
 from keras.layers import (Input, Dense, Softmax, Lambda)
-from keras.optimizers import Adagrad
 from keras.initializers import RandomNormal
 
 from rdkit.Chem import MolFromSmiles
@@ -19,8 +15,8 @@ from chainer_chemistry.dataset.parsers.csv_file_parser import CSVFileParser
 from chainer_chemistry.dataset.preprocessors.nfp_preprocessor import NFPPreprocessor
 
 from sklearn.metrics import (accuracy_score, precision_score, roc_auc_score,
-                             recall_score, auc, average_precision_score,
-                             roc_curve, precision_recall_curve)
+                             average_precision_score, roc_curve,
+                             precision_recall_curve)
 
 
 def load_data(csv_fp, labels_col="p_np", smiles_col="smiles"):
