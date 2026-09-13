@@ -6,12 +6,10 @@ import shutil
 import zipfile
 import time
 
-# torchlight
-import torchlight
 from torchlight import import_class
-import torch
 
 from processor.processor import init_seed
+from processor.registry import LEGACY_PROCESSORS, PROCESSORS
 init_seed(0)
 
 def save_src(target_path):
@@ -34,23 +32,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Processor collection')
 
-    # region register processor yapf: disable
-    processors = dict()
-    processors['linear_evaluation'] = import_class('processor.linear_evaluation.LE_Processor')
-    processors['linear_evaluation_att'] = import_class('processor.linear_evaluation_att.LE_Processor')
-
-    processors['pretrain_crossclr_3views'] = import_class('processor.pretrain_crossclr_3views.CrosSCLR_3views_Processor')
-    processors['pretrain_crossclr'] = import_class('processor.pretrain_crossclr.CrosSCLR_Processor')
-    processors['pretrain_skeletonclr'] = import_class('processor.pretrain_skeletonclr.SkeletonCLR_Processor')
-    processors['pretrain_skeletonclr_eucl'] = import_class('processor.pretrain_skeletonclr_eucl.SkeletonCLR_Processor')
-    processors['pretrain_skeletonclr_3views'] = import_class('processor.pretrain_skeletonclr_3views.SkeletonCLR_3views_Processor')
-    processors['pretrain_skeletonclr_3views_eucl'] = import_class('processor.pretrain_skeletonclr_3views_eucl.SkeletonCLR_3views_Eucl_Processor')
-    processors['pretrain_skeletonclr_att'] = import_class('processor.pretrain_skeletonclr_att.SkeletonCLR_Att_Processor')
-
-    processors['plot_skeletonclr_mert'] = import_class('processor.plot_skeletonclr_mert.SkeletonCLR_Plotting')
-    processors['plot_skeletonclr'] = import_class('processor.plot_skeletonclr.SkeletonCLR_Plotting')
-    processors['plot_skeletonclr_eucl'] = import_class('processor.plot_skeletonclr_eucl.SkeletonCLR_Plotting')
-    # endregion yapf: enable
+    processors = {name: import_class(path) for name, path in PROCESSORS.items()}
 
     # add sub-parser
     subparsers = parser.add_subparsers(dest='processor')
@@ -59,6 +41,12 @@ if __name__ == '__main__':
 
     # read arguments
     arg = parser.parse_args()
+
+    if arg.processor in LEGACY_PROCESSORS:
+        print(
+            f"WARNING: Processor '{arg.processor}' is legacy and is kept for reference and reproduction.",
+            file=sys.stderr,
+        )
 
     # start
     Processor = processors[arg.processor]
