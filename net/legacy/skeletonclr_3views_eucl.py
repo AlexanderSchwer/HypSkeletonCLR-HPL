@@ -168,50 +168,50 @@ class SkeletonCLR_3views_Eucl(nn.Module):
         self.queue_ptr_bone[0] = (self.queue_ptr_bone[0] + batch_size) % self.K
 
 
-    def forward(self, im_q, im_k=None, view='joint', cross=False, topk=1, context=False):
+    def forward(self, x_q, x_k=None, view='joint', cross=False, topk=1, context=False):
         """
         Input:
-            im_q: a batch of query images
-            im_k: a batch of key images
+            x_q: query batch of augmented skeleton sequences, shape (N, C, T, V, M).
+            x_k: key batch of augmented skeleton sequences, shape (N, C, T, V, M).
         """
 
         if cross:
-            return self.cross_training(im_q, im_k, topk, context)
+            return self.cross_training(x_q, x_k, topk, context)
 
-        im_q_motion = torch.zeros_like(im_q)
-        im_q_motion[:, :, :-1, :, :] = im_q[:, :, 1:, :, :] - im_q[:, :, :-1, :, :]
+        x_q_motion = torch.zeros_like(x_q)
+        x_q_motion[:, :, :-1, :, :] = x_q[:, :, 1:, :, :] - x_q[:, :, :-1, :, :]
 
-        im_q_bone = torch.zeros_like(im_q)
+        x_q_bone = torch.zeros_like(x_q)
         for v1, v2 in self.Bone:
-            im_q_bone[:, :, :, v1 - 1, :] = im_q[:, :, :, v1 - 1, :] - im_q[:, :, :, v2 - 1, :]
+            x_q_bone[:, :, :, v1 - 1, :] = x_q[:, :, :, v1 - 1, :] - x_q[:, :, :, v2 - 1, :]
 
         if not self.pretrain:
             if view == 'joint':
-                return self.encoder_q(im_q)
+                return self.encoder_q(x_q)
             elif view == 'motion':
-                return self.encoder_q_motion(im_q_motion)
+                return self.encoder_q_motion(x_q_motion)
             elif view == 'bone':
-                return self.encoder_q_bone(im_q_bone)
+                return self.encoder_q_bone(x_q_bone)
             elif view == 'all':
-                return (self.encoder_q(im_q) + self.encoder_q_motion(im_q_motion) + self.encoder_q_bone(im_q_bone)) / 3.
+                return (self.encoder_q(x_q) + self.encoder_q_motion(x_q_motion) + self.encoder_q_bone(x_q_bone)) / 3.
             else:
                 raise ValueError
 
-        im_k_motion = torch.zeros_like(im_k)
-        im_k_motion[:, :, :-1, :, :] = im_k[:, :, 1:, :, :] - im_k[:, :, :-1, :, :]
+        x_k_motion = torch.zeros_like(x_k)
+        x_k_motion[:, :, :-1, :, :] = x_k[:, :, 1:, :, :] - x_k[:, :, :-1, :, :]
 
-        im_k_bone = torch.zeros_like(im_k)
+        x_k_bone = torch.zeros_like(x_k)
         for v1, v2 in self.Bone:
-            im_k_bone[:, :, :, v1 - 1, :] = im_k[:, :, :, v1 - 1, :] - im_k[:, :, :, v2 - 1, :]
+            x_k_bone[:, :, :, v1 - 1, :] = x_k[:, :, :, v1 - 1, :] - x_k[:, :, :, v2 - 1, :]
 
         # compute query features
-        q = self.encoder_q(im_q)  # queries shape: [batch_size, feature_dim]
+        q = self.encoder_q(x_q)  # queries shape: [batch_size, feature_dim]
         q = F.normalize(q, dim=1)
 
-        q_motion = self.encoder_q_motion(im_q_motion)
+        q_motion = self.encoder_q_motion(x_q_motion)
         q_motion = F.normalize(q_motion, dim=1)
 
-        q_bone = self.encoder_q_bone(im_q_bone)
+        q_bone = self.encoder_q_bone(x_q_bone)
         q_bone = F.normalize(q_bone, dim=1)
 
         # compute key features
@@ -221,13 +221,13 @@ class SkeletonCLR_3views_Eucl(nn.Module):
             self._momentum_update_key_encoder_bone()
 
             # compute key features
-            k = self.encoder_k(im_k)  # keys shape: [batch_size, feature_dim]
+            k = self.encoder_k(x_k)  # keys shape: [batch_size, feature_dim]
             k = F.normalize(k, dim=1)
 
-            k_motion = self.encoder_k_motion(im_k_motion)
+            k_motion = self.encoder_k_motion(x_k_motion)
             k_motion = F.normalize(k_motion, dim=1)
 
-            k_bone = self.encoder_k_bone(im_k_bone)
+            k_bone = self.encoder_k_bone(x_k_bone)
             k_bone = F.normalize(k_bone, dim=1)
         
         # compute logits

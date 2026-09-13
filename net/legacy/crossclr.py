@@ -123,37 +123,37 @@ class CrosSCLR(nn.Module):
         self.queue_ptr[0] = (self.queue_ptr[0] + batch_size) % self.K
         self.queue_ptr_motion[0] = (self.queue_ptr_motion[0] + batch_size) % self.K
 
-    def forward(self, im_q, im_k=None, view='all', cross=False, topk=1, context=True): 
+    def forward(self, x_q, x_k=None, view='all', cross=False, topk=1, context=True):
         """
         Input:
-            im_q: a batch of query images
-            im_k: a batch of key images
+            x_q: query batch of augmented skeleton sequences, shape (N, C, T, V, M).
+            x_k: key batch of augmented skeleton sequences, shape (N, C, T, V, M).
         """
 
         if cross:
-            return self.cross_training(im_q, im_k, topk, context)
+            return self.cross_training(x_q, x_k, topk, context)
 
-        im_q_motion = torch.zeros_like(im_q)
-        im_q_motion[:, :, :-1, :, :] = im_q[:, :, 1:, :, :] - im_q[:, :, :-1, :, :]
+        x_q_motion = torch.zeros_like(x_q)
+        x_q_motion[:, :, :-1, :, :] = x_q[:, :, 1:, :, :] - x_q[:, :, :-1, :, :]
 
         if not self.pretrain:
             if view == 'joint':
-                return self.encoder_q(im_q)
+                return self.encoder_q(x_q)
             elif view == 'motion':
-                return self.encoder_q_motion(im_q_motion)
+                return self.encoder_q_motion(x_q_motion)
             elif view == 'all':
-                return (self.encoder_q(im_q) + self.encoder_q_motion(im_q_motion)) / 2.
+                return (self.encoder_q(x_q) + self.encoder_q_motion(x_q_motion)) / 2.
             else:
                 raise ValueError
         
-        im_k_motion = torch.zeros_like(im_k)
-        im_k_motion[:, :, :-1, :, :] = im_k[:, :, 1:, :, :] - im_k[:, :, :-1, :, :]
+        x_k_motion = torch.zeros_like(x_k)
+        x_k_motion[:, :, :-1, :, :] = x_k[:, :, 1:, :, :] - x_k[:, :, :-1, :, :]
 
         # compute query features
-        q = self.encoder_q(im_q)  # queries: NxC
+        q = self.encoder_q(x_q)  # queries: NxC
         q = F.normalize(q, dim=1)
 
-        q_motion = self.encoder_q_motion(im_q_motion)
+        q_motion = self.encoder_q_motion(x_q_motion)
         q_motion = F.normalize(q_motion, dim=1)
 
         # compute key features
@@ -161,10 +161,10 @@ class CrosSCLR(nn.Module):
             self._momentum_update_key_encoder()  # update the key encoder
             self._momentum_update_key_encoder_motion()
 
-            k = self.encoder_k(im_k)  # keys: NxC
+            k = self.encoder_k(x_k)  # keys: NxC
             k = F.normalize(k, dim=1)
 
-            k_motion = self.encoder_k_motion(im_k_motion)
+            k_motion = self.encoder_k_motion(x_k_motion)
             k_motion = F.normalize(k_motion, dim=1)
 
         # compute logits
@@ -194,26 +194,26 @@ class CrosSCLR(nn.Module):
 
         return logits, logits_motion, labels
 
-    def cross_training(self, im_q, im_k, topk=1, context=True):
-        im_q_motion = torch.zeros_like(im_q)
-        im_q_motion[:, :, :-1, :, :] = im_q[:, :, 1:, :, :] - im_q[:, :, :-1, :, :]
+    def cross_training(self, x_q, x_k, topk=1, context=True):
+        x_q_motion = torch.zeros_like(x_q)
+        x_q_motion[:, :, :-1, :, :] = x_q[:, :, 1:, :, :] - x_q[:, :, :-1, :, :]
 
-        im_k_motion = torch.zeros_like(im_k)
-        im_k_motion[:, :, :-1, :, :] = im_k[:, :, 1:, :, :] - im_k[:, :, :-1, :, :]
+        x_k_motion = torch.zeros_like(x_k)
+        x_k_motion[:, :, :-1, :, :] = x_k[:, :, 1:, :, :] - x_k[:, :, :-1, :, :]
 
-        q = self.encoder_q(im_q)
+        q = self.encoder_q(x_q)
         q = F.normalize(q, dim=1)
 
-        q_motion = self.encoder_q_motion(im_q_motion)
+        q_motion = self.encoder_q_motion(x_q_motion)
         q_motion = F.normalize(q_motion, dim=1)
         
         with torch.no_grad():
             self._momentum_update_key_encoder_motion()
 
-            k = self.encoder_k(im_k)
+            k = self.encoder_k(x_k)
             k = F.normalize(k, dim=1)
             
-            k_motion = self.encoder_k_motion(im_k_motion)
+            k_motion = self.encoder_k_motion(x_k_motion)
             k_motion = F.normalize(k_motion, dim=1)
 
         l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)

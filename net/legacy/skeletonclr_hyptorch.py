@@ -106,20 +106,20 @@ class SkeletonCLRHyptorch(nn.Module):
         self.queue_ptr[0] = (self.queue_ptr[0] + batch_size) % self.K
 
 
-    def forward(self, im_q, im_k=None, view='joint', cross=False, topk=1, context=False):
+    def forward(self, x_q, x_k=None, view='joint', cross=False, topk=1, context=False):
         """
         Input:
-            im_q: a batch of query images
-            im_k: a batch of key images
+            x_q: query batch of augmented skeleton sequences, shape (N, C, T, V, M).
+            x_k: key batch of augmented skeleton sequences, shape (N, C, T, V, M).
         """
 
         if cross:
-            return self.cross_training(im_q, im_k, topk, context)
+            return self.cross_training(x_q, x_k, topk, context)
 
         if not self.pretrain:
-            return self.encoder_q(im_q)
+            return self.encoder_q(x_q)
 
-        q_hyp_c = self.encoder_q(im_q)  # queries: NxC
+        q_hyp_c = self.encoder_q(x_q)  # queries: NxC
 
         if self.decoupled:
             q_hyp_c_Rn = self.decouple_norm_from_direction(q_hyp_c)
@@ -129,7 +129,7 @@ class SkeletonCLRHyptorch(nn.Module):
 
         # compute key features
         with torch.no_grad():  # no gradient to keys
-            k_hyp_p = self.encoder_k(im_k)  # keys: NxC
+            k_hyp_p = self.encoder_k(x_k)  # keys: NxC
 
             kp_proj= self.tp(k_hyp_p)
 

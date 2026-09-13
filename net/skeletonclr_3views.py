@@ -187,51 +187,51 @@ class SkeletonCLR_3views(nn.Module):
         self.queue_ptr_bone[0] = (self.queue_ptr_bone[0] + batch_size) % self.K
 
 
-    def forward(self, im_q, im_k=None, view='joint', cross=False, topk=1, context=False):
+    def forward(self, x_q, x_k=None, view='joint', cross=False, topk=1, context=False):
         """
         Input:
-            im_q: a batch of query images
-            im_k: a batch of key images
+            x_q: query batch of augmented skeleton sequences, shape (N, C, T, V, M).
+            x_k: key batch of augmented skeleton sequences, shape (N, C, T, V, M).
         """
         if cross:
-            return self.cross_training(im_q, im_k, topk, context)
+            return self.cross_training(x_q, x_k, topk, context)
 
-        im_q_motion = torch.zeros_like(im_q)
-        im_q_motion[:, :, :-1, :, :] = im_q[:, :, 1:, :, :] - im_q[:, :, :-1, :, :]
+        x_q_motion = torch.zeros_like(x_q)
+        x_q_motion[:, :, :-1, :, :] = x_q[:, :, 1:, :, :] - x_q[:, :, :-1, :, :]
 
-        im_q_bone = torch.zeros_like(im_q)
+        x_q_bone = torch.zeros_like(x_q)
         for v1, v2 in self.Bone:
-            im_q_bone[:, :, :, v1 - 1, :] = im_q[:, :, :, v1 - 1, :] - im_q[:, :, :, v2 - 1, :]
+            x_q_bone[:, :, :, v1 - 1, :] = x_q[:, :, :, v1 - 1, :] - x_q[:, :, :, v2 - 1, :]
 
         if not self.pretrain:
             if view == 'joint':
-                return self.encoder_q(im_q)
+                return self.encoder_q(x_q)
             elif view == 'motion':
-                return self.encoder_q_motion(im_q_motion)
+                return self.encoder_q_motion(x_q_motion)
             elif view == 'bone':
-                return self.encoder_q_bone(im_q_bone)
+                return self.encoder_q_bone(x_q_bone)
             elif view == 'all':
-                return (self.encoder_q(im_q) + self.encoder_q_motion(im_q_motion) + self.encoder_q_bone(im_q_bone)) / 3.
+                return (self.encoder_q(x_q) + self.encoder_q_motion(x_q_motion) + self.encoder_q_bone(x_q_bone)) / 3.
             else:
                 raise ValueError
 
-        im_k_motion = torch.zeros_like(im_k)
-        im_k_motion[:, :, :-1, :, :] = im_k[:, :, 1:, :, :] - im_k[:, :, :-1, :, :]
+        x_k_motion = torch.zeros_like(x_k)
+        x_k_motion[:, :, :-1, :, :] = x_k[:, :, 1:, :, :] - x_k[:, :, :-1, :, :]
 
-        im_k_bone = torch.zeros_like(im_k)
+        x_k_bone = torch.zeros_like(x_k)
         for v1, v2 in self.Bone:
-            im_k_bone[:, :, :, v1 - 1, :] = im_k[:, :, :, v1 - 1, :] - im_k[:, :, :, v2 - 1, :]
+            x_k_bone[:, :, :, v1 - 1, :] = x_k[:, :, :, v1 - 1, :] - x_k[:, :, :, v2 - 1, :]
 
         # compute query features
-        q_e = self.encoder_q(im_q)  # queries shape: [batch_size, feature_dim]
+        q_e = self.encoder_q(x_q)  # queries shape: [batch_size, feature_dim]
         q_e = F.normalize(q_e, dim=1)
         q = self.geometry.expmap0(q_e)
 
-        q_motion_e = self.encoder_q_motion(im_q_motion)
+        q_motion_e = self.encoder_q_motion(x_q_motion)
         q_motion_e = F.normalize(q_motion_e, dim=1)
         q_motion = self.geometry.expmap0(q_motion_e)
 
-        q_bone_e = self.encoder_q_bone(im_q_bone)
+        q_bone_e = self.encoder_q_bone(x_q_bone)
         q_bone_e = F.normalize(q_bone_e, dim=1)
         q_bone = self.geometry.expmap0(q_bone_e)
 
@@ -245,17 +245,17 @@ class SkeletonCLR_3views(nn.Module):
             self._momentum_update_key_encoder_bone()
 
             # compute key features
-            k_e = self.encoder_k(im_k)  # keys shape: [batch_size, feature_dim]
+            k_e = self.encoder_k(x_k)  # keys shape: [batch_size, feature_dim]
             k_e = F.normalize(k_e, dim=1)
             k_eucl = k_e.clone().detach()
             k = self.geometry.expmap0(k_e)
 
-            k_motion_e = self.encoder_k_motion(im_k_motion)
+            k_motion_e = self.encoder_k_motion(x_k_motion)
             k_motion_e = F.normalize(k_motion_e, dim=1)
             k_motion_eucl = k_motion_e.clone().detach()
             k_motion = self.geometry.expmap0(k_motion_e)
 
-            k_bone_e = self.encoder_k_bone(im_k_bone)
+            k_bone_e = self.encoder_k_bone(x_k_bone)
             k_bone_e = F.normalize(k_bone_e, dim=1)
             k_bone_eucl = k_bone_e.clone().detach()
             k_bone = self.geometry.expmap0(k_bone_e)

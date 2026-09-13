@@ -107,20 +107,20 @@ class SkeletonCLR(nn.Module):
         assert self.K % batch_size == 0 #  for simplicity
         self.queue_ptr[0] = (self.queue_ptr[0] + batch_size) % self.K
 
-    def forward(self, im_q, im_k=None, view='joint', cross=False, topk=1, context=False):
+    def forward(self, x_q, x_k=None, view='joint', cross=False, topk=1, context=False):
         """
         Input:
-            im_q: a batch of query images
-            im_k: a batch of key images
+            x_q: query batch of augmented skeleton sequences, shape (N, C, T, V, M).
+            x_k: key batch of augmented skeleton sequences, shape (N, C, T, V, M).
         """
         if cross:
-            return self.cross_training(im_q, im_k, topk, context)
+            return self.cross_training(x_q, x_k, topk, context)
 
         if not self.pretrain:
-            return self.encoder_q(im_q)
+            return self.encoder_q(x_q)
 
         # compute query features
-        q_e = self.encoder_q(im_q)  # queries shape: [batch_size, feature_dim]
+        q_e = self.encoder_q(x_q)  # queries shape: [batch_size, feature_dim]
         q_e = F.normalize(q_e, dim=1)
         q_h = self.geometry.expmap0(q_e)
 
@@ -129,7 +129,7 @@ class SkeletonCLR(nn.Module):
             self._momentum_update_key_encoder()  # update the key encoder
 
             # compute key features
-            k_e = self.encoder_k(im_k)  # keys shape: [batch_size, feature_dim]
+            k_e = self.encoder_k(x_k)  # keys shape: [batch_size, feature_dim]
             k_e = F.normalize(k_e, dim=1)
             k_eucl = k_e.clone().detach()
             k_h = self.geometry.expmap0(k_e)
@@ -156,7 +156,7 @@ class SkeletonCLR(nn.Module):
         # labels: positive key indicators
         labels = torch.zeros(scores.shape[0], dtype=torch.long, device=scores.device)
 
-        # Combine q (query) and k (key) as two views of the same image
+        # Combine q (query) and k (key) as two augmented views of the same skeleton sequence
         features = torch.cat([q_h.unsqueeze(1), k_h.unsqueeze(1)], dim=1)  # features shape: [batch_size, n_views, feature_dim], with n_views=2 (q and k)
 
         # dequeue and enqueue

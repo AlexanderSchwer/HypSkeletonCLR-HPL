@@ -84,23 +84,23 @@ class SkeletonCLR(nn.Module):
         assert self.K % batch_size == 0 #  for simplicity
         self.queue_ptr[0] = (self.queue_ptr[0] + batch_size) % self.K
 
-    def forward(self, im_q, im_k=None, view='joint', cross=False, topk=1, context=False):
+    def forward(self, x_q, x_k=None, view='joint', cross=False, topk=1, context=False):
         """
         Input:
-            im_q: a batch of query images
-            im_k: a batch of key images
+            x_q: query batch of augmented skeleton sequences, shape (N, C, T, V, M).
+            x_k: key batch of augmented skeleton sequences, shape (N, C, T, V, M).
         """
 
         if cross:
-            return self.cross_training(im_q, im_k, topk, context)
+            return self.cross_training(x_q, x_k, topk, context)
 
         if not self.pretrain:
-            return self.encoder_q(im_q)
+            return self.encoder_q(x_q)
 
         grad_fix = lambda x: pmath.RiemannianGradient.apply(x)
 
         # compute query features
-        q = self.encoder_q(im_q)  # queries: NxC
+        q = self.encoder_q(x_q)  # queries: NxC
         # HYP: Embed in the Poincaré ball
         q = grad_fix(pmath.project(pmath.expmap0(q)))
 
@@ -108,7 +108,7 @@ class SkeletonCLR(nn.Module):
         with torch.no_grad():  # no gradient to keys
             self._momentum_update_key_encoder()  # update the key encoder
 
-            k = self.encoder_k(im_k)  # keys: NxC
+            k = self.encoder_k(x_k)  # keys: NxC
             # HYP: Embed in the Poincaré ball
             k = grad_fix(pmath.project(pmath.expmap0(k)))
 
@@ -130,7 +130,7 @@ class SkeletonCLR(nn.Module):
         labels = torch.zeros(logits.shape[0], dtype=torch.long).cuda()
 
         # HYP: Supervised Contrastive Learning
-        # Combine q (query) and k (key) as two views of the same image
+        # Combine q (query) and k (key) as two augmented views of the same skeleton sequence
         features = torch.cat([q.unsqueeze(1), k.unsqueeze(1)], dim=1)  # features shape: [batch_size, n_views, feature_dim], with n_views=2 (q and k)
 
         # dequeue and enqueue

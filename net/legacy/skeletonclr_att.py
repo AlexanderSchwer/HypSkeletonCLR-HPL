@@ -84,21 +84,21 @@ class SkeletonCLR_Att(nn.Module):
         assert self.K % batch_size == 0 #  for simplicity
         self.queue_ptr[0] = (self.queue_ptr[0] + batch_size) % self.K
 
-    def forward(self, im_q, im_k=None, view='joint', cross=False, topk=1, context=False):
+    def forward(self, x_q, x_k=None, view='joint', cross=False, topk=1, context=False):
         """
         Input:
-            im_q: a batch of query images
-            im_k: a batch of key images
+            x_q: query batch of augmented skeleton sequences, shape (N, C, T, V, M).
+            x_k: key batch of augmented skeleton sequences, shape (N, C, T, V, M).
         """
         if cross:
-            return self.cross_training(im_q, im_k, topk, context)
+            return self.cross_training(x_q, x_k, topk, context)
 
         if not self.pretrain:
-            return self.encoder_q(im_q)
+            return self.encoder_q(x_q)
 
         poincare_ball = gt.PoincareBall(self.c)
         # compute query features
-        q, q_sp_attns, q_tp_attns = self.encoder_q(im_q)  # queries shape: [batch_size, feature_dim]
+        q, q_sp_attns, q_tp_attns = self.encoder_q(x_q)  # queries shape: [batch_size, feature_dim]
         q = F.normalize(q, dim=1)
         q = poincare_ball.expmap0(q) # shape: [batch_size, feature_dim]
 
@@ -107,7 +107,7 @@ class SkeletonCLR_Att(nn.Module):
             self._momentum_update_key_encoder()  # update the key encoder
 
             # compute key features
-            k, k_sp_attns, k_tp_attns = self.encoder_k(im_k)  # keys shape: [batch_size, feature_dim]
+            k, k_sp_attns, k_tp_attns = self.encoder_k(x_k)  # keys shape: [batch_size, feature_dim]
             k = F.normalize(k, dim=1)
             k_eucl = k.clone().detach()
             k = poincare_ball.expmap0(k) # shape: [batch_size, feature_dim]
@@ -131,7 +131,7 @@ class SkeletonCLR_Att(nn.Module):
         # labels: positive key indicators
         labels = torch.zeros(logits.shape[0], dtype=torch.long).cuda()
 
-        # Combine q (query) and k (key) as two views of the same image
+        # Combine q (query) and k (key) as two augmented views of the same skeleton sequence
         features = torch.cat([q.unsqueeze(1), k.unsqueeze(1)], dim=1)  # features shape: [batch_size, n_views, feature_dim], with n_views=2 (q and k)
         
         sp_att = [q_sp_attns, k_sp_attns]
