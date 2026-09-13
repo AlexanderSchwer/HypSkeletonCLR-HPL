@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchlight import import_class
-import geoopt as gt
+from tools.hyperbolic_geometry import make_hyperbolic_geometry
 from tools.sinkhorn import sinkhorn_balanced_probabilities
 
 class SkeletonCLR(nn.Module):
@@ -12,7 +12,7 @@ class SkeletonCLR(nn.Module):
                  momentum=0.999, Temperature=0.07, mlp=True, in_channels=3, hidden_channels=64,
                  hidden_dim=256, num_class=60, dropout=0.5,
                  graph_args={'layout': 'ntu-rgb+d', 'strategy': 'spatial'},
-                 edge_importance_weighting=True, curvature=1.0,
+                 edge_importance_weighting=True, curvature=1.0, geometry_model='poincare',
                  cluster_enabled=False, num_clusters=120, sinkhorn_tau=0.1,
                  sinkhorn_iters=20, sinkhorn_eps=0.05, **kwargs):
         """
@@ -29,6 +29,7 @@ class SkeletonCLR(nn.Module):
         self.sinkhorn_tau = float(sinkhorn_tau)
         self.sinkhorn_iters = int(sinkhorn_iters)
         self.sinkhorn_eps = float(sinkhorn_eps)
+        self.geometry_model = geometry_model
 
         if not self.pretrain:
             self.encoder_q = base_encoder(in_channels=in_channels, hidden_channels=hidden_channels,
@@ -37,11 +38,13 @@ class SkeletonCLR(nn.Module):
                                           edge_importance_weighting=edge_importance_weighting,
                                           **kwargs)
             self.c = curvature
+            self.geometry = make_hyperbolic_geometry(self.geometry_model, self.c)
         else:
             self.K = queue_size
             self.m = momentum
             self.T = Temperature
             self.c = curvature
+            self.geometry = make_hyperbolic_geometry(self.geometry_model, self.c)
 
             self.encoder_q = base_encoder(in_channels=in_channels, hidden_channels=hidden_channels,
                                           hidden_dim=hidden_dim, num_class=feature_dim,
@@ -116,12 +119,10 @@ class SkeletonCLR(nn.Module):
         if not self.pretrain:
             return self.encoder_q(im_q)
 
-        poincare_ball = gt.PoincareBall(self.c)
-
         # compute query features
         q_e = self.encoder_q(im_q)  # queries shape: [batch_size, feature_dim]
         q_e = F.normalize(q_e, dim=1)
-        q_h = poincare_ball.expmap0(q_e) # shape: [batch_size, feature_dim]
+        q_h = self.geometry.expmap0(q_e)
 
         # compute key features
         with torch.no_grad():  # no gradient to keys
@@ -131,17 +132,20 @@ class SkeletonCLR(nn.Module):
             k_e = self.encoder_k(im_k)  # keys shape: [batch_size, feature_dim]
             k_e = F.normalize(k_e, dim=1)
             k_eucl = k_e.clone().detach()
-            k_h = poincare_ball.expmap0(k_e) # shape: [batch_size, feature_dim]
+            k_h = self.geometry.expmap0(k_e)
         
         # compute contrastive scores
         # positive scores shape: [batch_size, 1]
-        pos_scores = -poincare_ball.dist(q_h, k_h).unsqueeze(-1)
+        pos_scores = -self.geometry.dist(q_h, k_h).unsqueeze(-1)
 
         # negative scores shape: [batch_size, queue_size]
         # transpose self.queue to match dimensions for pairwise comparison [feature_dim, queue_size]
         # expand q and queue to compute pairwise distances
         # compute all pairwise (negative) hyperbolic distances between q and queue
-        neg_scores = -poincare_ball.dist(q_h.unsqueeze(1), poincare_ball.expmap0(self.queue.clone().detach().T))
+        neg_scores = -self.geometry.dist(
+            q_h.unsqueeze(1),
+            self.geometry.expmap0(self.queue.clone().detach().T),
+        )
 
         # scores shape: [batch_size, 1+queue_size]
         scores = torch.cat([pos_scores, neg_scores], dim=1)
@@ -159,15 +163,13 @@ class SkeletonCLR(nn.Module):
         self._dequeue_and_enqueue(k_eucl)
 
         if self.cluster_enabled:
-            proto_norm = self.proto_tan.norm(dim=1, keepdim=True).clamp_min(1e-12)
-            proto_tan = self.proto_tan * (torch.tanh(proto_norm) / proto_norm)
-            proto_h = poincare_ball.expmap0(proto_tan)
+            proto_h = self.geometry.tangent_proto_to_manifold(self.proto_tan)
 
             # Paper notation:
             # P_ij = p(y_i = j | x_i) are predicted posterior probabilities.
             # Q_ij = q(y_i = j | x_i) are the same probabilities after OT balancing.
-            dist_q_proto = poincare_ball.dist(q_h.unsqueeze(1), proto_h.unsqueeze(0))
-            dist_k_proto = poincare_ball.dist(k_h.unsqueeze(1), proto_h.unsqueeze(0))
+            dist_q_proto = self.geometry.dist(q_h.unsqueeze(1), proto_h.unsqueeze(0))
+            dist_k_proto = self.geometry.dist(k_h.unsqueeze(1), proto_h.unsqueeze(0))
             p_q = F.softmax(-dist_q_proto / self.sinkhorn_tau, dim=1)
             p_k = F.softmax(-dist_k_proto / self.sinkhorn_tau, dim=1)
 

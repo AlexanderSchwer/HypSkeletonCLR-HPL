@@ -10,6 +10,7 @@ from tools.hyperbolic_hierarchy import (
     sample_triplets_from_affinity,
     update_affinity_ema,
 )
+from tools.hyperbolic_geometry import make_hyperbolic_geometry
 from tools.sinkhorn import sinkhorn_balanced_probabilities
 
 
@@ -54,6 +55,35 @@ class HyperbolicHierarchyTest(unittest.TestCase):
         triplets = torch.tensor([[0, 1, 2], [1, 2, 3]])
 
         loss = hierarchy_triplet_loss_hyp(proto_h, triplets, curvature=1.0)
+        loss.backward()
+
+        self.assertTrue(torch.isfinite(loss))
+        self.assertTrue(torch.isfinite(raw.grad).all())
+
+    def test_lorentz_backend_maps_tangent_to_ambient_hyperboloid(self):
+        geometry = make_hyperbolic_geometry("lorentz", curvature=1.0)
+        tangent = torch.randn(5, 3) * 0.1
+
+        points = geometry.expmap0(tangent)
+        pairwise = geometry.dist(points.unsqueeze(1), points.unsqueeze(0))
+
+        self.assertEqual(tuple(points.shape), (5, 4))
+        self.assertTrue(torch.isfinite(points).all())
+        self.assertTrue(torch.isfinite(pairwise).all())
+        torch.testing.assert_close(pairwise.diag(), torch.zeros(5), atol=1e-3, rtol=1e-5)
+
+    def test_lorentz_hierarchy_loss_has_finite_gradients(self):
+        geometry = make_hyperbolic_geometry("lorentz", curvature=1.0)
+        raw = torch.randn(4, 3, requires_grad=True)
+        proto_h = geometry.expmap0(raw / (1.0 + raw.norm(dim=1, keepdim=True)))
+        triplets = torch.tensor([[0, 1, 2], [1, 2, 3]])
+
+        loss = hierarchy_triplet_loss_hyp(
+            proto_h,
+            triplets,
+            curvature=1.0,
+            geometry_model="lorentz",
+        )
         loss.backward()
 
         self.assertTrue(torch.isfinite(loss))

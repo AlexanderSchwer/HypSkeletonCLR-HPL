@@ -1,10 +1,11 @@
 import torch
 import torch.nn.functional as F
-import geoopt as gt
+
+from tools.hyperbolic_geometry import make_hyperbolic_geometry
 
 
 @torch.no_grad()
-def prototype_affinity_hyp(proto_h, curvature, temperature=1.0):
+def prototype_affinity_hyp(proto_h, curvature, temperature=1.0, geometry_model="poincare"):
     """
     Compute pairwise prototype affinity from hyperbolic distance.
     """
@@ -13,8 +14,8 @@ def prototype_affinity_hyp(proto_h, curvature, temperature=1.0):
     if temperature <= 0:
         raise ValueError("temperature must be > 0")
 
-    poincare_ball = gt.PoincareBall(curvature)
-    pairwise_dist = poincare_ball.dist(proto_h.unsqueeze(1), proto_h.unsqueeze(0))
+    geometry = make_hyperbolic_geometry(geometry_model, curvature)
+    pairwise_dist = geometry.dist(proto_h.unsqueeze(1), proto_h.unsqueeze(0))
     affinity = torch.exp(-pairwise_dist / temperature)
     affinity.fill_diagonal_(0.0)
     return affinity / affinity.sum().clamp_min(1e-12)
@@ -116,7 +117,13 @@ def _lca_depth_hyp(x, y, manifold):
     return depth.clamp_min(0.0)
 
 
-def hierarchy_triplet_loss_hyp(proto_h, triplets, curvature, margin=0.05):
+def hierarchy_triplet_loss_hyp(
+    proto_h,
+    triplets,
+    curvature,
+    margin=0.05,
+    geometry_model="poincare",
+):
     """
     Hyperbolic hierarchical loss aligned with Sec. 3.2:
     maximize root-distance of positive-pair LCA over negative-pair LCAs
@@ -129,7 +136,7 @@ def hierarchy_triplet_loss_hyp(proto_h, triplets, curvature, margin=0.05):
     if triplets.dim() != 2 or triplets.shape[1] != 3:
         raise ValueError(f"triplets must be [T, 3], got shape {tuple(triplets.shape)}")
 
-    poincare_ball = gt.PoincareBall(curvature)
+    geometry = make_hyperbolic_geometry(geometry_model, curvature)
 
     anchors = triplets[:, 0]
     positives = triplets[:, 1]
@@ -140,9 +147,9 @@ def hierarchy_triplet_loss_hyp(proto_h, triplets, curvature, margin=0.05):
     neg = proto_h[negatives]
 
     # Similar pairs should share a deeper rooted ancestor than dissimilar pairs.
-    s_ap = _lca_depth_hyp(anc, pos, poincare_ball)
-    s_an = _lca_depth_hyp(anc, neg, poincare_ball) + margin
-    s_pn = _lca_depth_hyp(pos, neg, poincare_ball) + margin
+    s_ap = _lca_depth_hyp(anc, pos, geometry)
+    s_an = _lca_depth_hyp(anc, neg, geometry) + margin
+    s_pn = _lca_depth_hyp(pos, neg, geometry) + margin
 
     scores = torch.stack([s_ap, s_an, s_pn], dim=1)
     target = torch.zeros(scores.shape[0], dtype=torch.long, device=scores.device)

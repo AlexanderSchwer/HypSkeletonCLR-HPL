@@ -7,7 +7,7 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 
-import geoopt as gt
+from tools.hyperbolic_geometry import make_hyperbolic_geometry
 
 
 def pseudo_cluster_distance_floor_loss(
@@ -15,6 +15,7 @@ def pseudo_cluster_distance_floor_loss(
     pseudo_pair_weights,
     distance_floor,
     curvature=1.0,
+    geometry_model="poincare",
 ):
     """Penalize pseudo-positive pairs that become closer than distance_floor."""
     if distance_floor < 0:
@@ -51,8 +52,8 @@ def pseudo_cluster_distance_floor_loss(
         }
 
     contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)
-    poincare_ball = gt.PoincareBall(curvature)
-    pair_dist = poincare_ball.dist(
+    geometry = make_hyperbolic_geometry(geometry_model, curvature)
+    pair_dist = geometry.dist(
         contrast_feature.unsqueeze(1),
         contrast_feature.unsqueeze(0),
     )
@@ -78,12 +79,13 @@ class SupConLoss(nn.Module):
     """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
     It also supports the unsupervised contrastive loss in SimCLR"""
     def __init__(self, temperature=0.07, contrast_mode='all',
-                 base_temperature=0.07, curvature=1.0):
+                 base_temperature=0.07, curvature=1.0, geometry_model="poincare"):
         super(SupConLoss, self).__init__()
         self.temperature = temperature
         self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
         self.curvature = curvature
+        self.geometry_model = geometry_model
 
     def forward(self, features, labels=None, mask=None):
         """Compute loss for model. If both `labels` and `mask` are None,
@@ -140,17 +142,8 @@ class SupConLoss(nn.Module):
         else:
             raise ValueError('Unknown mode: {}'.format(self.contrast_mode))
 
-        # compute logits
-        # HYP: Compute all pairwise (negative) hyperbolic distances between anchor_feature and contrast_feature
-        poincare_ball = gt.PoincareBall(self.curvature)
-
-        # anchor_feature.unsqueeze(1) shape: [batch_size * n_views, 1, feature_dim]
-        # contrast_feature.unsqueeze(0) shape: [1, batch_size * n_views, feature_dim]
-        # hyp_dist shape: [batch_size * n_views, batch_size * n_views]
-        hyp_dist = -poincare_ball.dist(anchor_feature.unsqueeze(1), contrast_feature.unsqueeze(0))
-        
-        # hyp_dist shape: [batch_size * n_views]
-        #hyp_dist = -poincare_ball.dist(anchor_feature, contrast_feature)
+        geometry = make_hyperbolic_geometry(self.geometry_model, self.curvature)
+        hyp_dist = -geometry.dist(anchor_feature.unsqueeze(1), contrast_feature.unsqueeze(0))
 
         anchor_dot_contrast = torch.div(hyp_dist, self.temperature)
         #anchor_dot_contrast = torch.div(
