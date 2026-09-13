@@ -1,13 +1,19 @@
-# HypSkeletonCLR SupCon
+# HypSkeletonCLR-HPL: Hyperbolic SkeletonCLR with Hierarchy for Skeleton Action Representation Learning
 
-This repository is a working thesis fork of the original CrosSCLR/SkeletonCLR
-codebase for skeleton-based action representation learning. The active code
-focuses on SkeletonCLR-style pre-training with hyperbolic geometry, clustering,
+This repository, `HypSkeletonCLR-HPL`, implements HypSkeletonCLR-HPL, a
+hierarchy-aware pseudo-label extension of Hyperbolic SkeletonCLR for
+skeleton-based action representation learning. The active code focuses on
+SkeletonCLR-style pre-training with hyperbolic geometry, clustering,
 pseudo-label supervised contrastive losses, hierarchy diagnostics, and embedding
 plots for NTU RGB+D skeleton data.
 
 The original CrosSCLR code and experiment configs are still present where useful,
 but older experiment files have been moved under `config/legacy`.
+
+The short name follows the thesis contribution naming: `C` denotes balanced
+cluster/prototype assignment, `H` denotes the hierarchy-aware prototype
+objective, `PL` denotes cluster-derived pseudo-label feedback, and
+`HypSkeletonCLR-HPL` denotes the combined variant.
 
 <div align=center>
     <img src="resource/figures/motivation.png", width="600" >
@@ -42,8 +48,8 @@ editable. The bundled hyperbolic t-SNE package is needed when using `hyp_tsne`
 embedding plots.
 
 ```bash
-conda create -n hypskeletonclr python=3.11
-conda activate hypskeletonclr
+conda create -n hypskeletonclr-hpl python=3.11
+conda activate hypskeletonclr-hpl
 
 # Install the PyTorch build appropriate for your CUDA/runtime first.
 # Example CPU-only fallback:
@@ -201,8 +207,8 @@ If you use this repository or the thesis-specific hyperbolic SkeletonCLR changes
 please cite the accompanying bachelor thesis:
 
 ```bibtex
-@bachelorsthesis{schwer2026hypskeletonclr,
-  title  = {HypSkeletonCLR SupCon},
+@bachelorsthesis{schwer2026hypskeletonclr-hpl,
+  title  = {Hierarchical Pseudo-Labeling in Hyperbolic Space for Skeleton-Based Human Action Recognition},
   author = {Alexander Schwer},
   year   = {2026},
   note   = {Bachelor thesis}
@@ -211,9 +217,12 @@ please cite the accompanying bachelor thesis:
 
 ## Acknowledgement
 
-- This repository builds on the original
+- This repository directly builds on Claudia Almeida Jordan's
+  [HypSkeletonCLR_SupCon](https://github.com/ClaudiaAJ/HypSkeletonCLR_SupCon)
+  repository.
+- HypSkeletonCLR_SupCon itself builds on the original
   [CrosSCLR](https://github.com/LinguoLi/CrosSCLR) / SkeletonCLR codebase and
-  its CVPR 2021 paper, "3D Human Action Representation Learning via Cross-View
+  the CVPR 2021 paper, "3D Human Action Representation Learning via Cross-View
   Consistency Pursuit".
 - The original framework is based on the old version of
   [ST-GCN](https://github.com/yysijie/st-gcn/blob/master/OLD_README.md).

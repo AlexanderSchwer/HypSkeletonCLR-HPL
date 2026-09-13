@@ -5,7 +5,7 @@ import wandb
 from .work_dir import wandb_run_identity_from_work_dir
 
 
-DEFAULT_WANDB_PROJECT = 'HypSkeletonCLR_SupCon'
+DEFAULT_WANDB_PROJECT = 'HypSkeletonCLR-HPL'
 
 
 def init_wandb_from_work_dir(arg, job_type=None, config=None, **kwargs):
