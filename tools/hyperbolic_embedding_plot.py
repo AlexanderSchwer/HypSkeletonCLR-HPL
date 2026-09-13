@@ -1494,6 +1494,8 @@ def _hyperbolic_tsne(
         vanilla=False,
         exact=False,
         area_split=False,
+        grad_fix=True,
+        grad_scale_fix=True,
         n_iter_check=10,
         size_tol=0.999,
     )

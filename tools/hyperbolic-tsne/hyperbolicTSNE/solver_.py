@@ -246,17 +246,18 @@ def gradient_descent(
             error, grad = cf.obj_grad(y, **cf_params)
 
             if isinstance(cf, HyperbolicKL):
-                # New Fix
-                if grad_scale_fix:
-                    grad = ((1. - np.linalg.norm(y.reshape(n_samples, 2), axis=1)
-                            ** 2) ** 2)[:, np.newaxis] * grad.reshape(n_samples, 2) / 4
-                    grad = grad.flatten()
-
                 grad_norm = linalg.norm(grad)
             else:
                 grad_norm = linalg.norm(grad)
         else:
             grad = cf.grad(y, **cf_params)
+            grad_norm = linalg.norm(grad)
+
+        # Convert the coordinate gradient to the Riemannian gradient on EVERY
+        # iteration, including iterations where we do not evaluate convergence.
+        if isinstance(cf, HyperbolicKL) and grad_scale_fix:
+            conformal_inverse = (1. - np.sum(y.reshape(n_samples, 2) ** 2, axis=1)) ** 2 / 4.
+            grad = (conformal_inverse[:, None] * grad.reshape(n_samples, 2)).ravel()
             grad_norm = linalg.norm(grad)
 
         # Perform the actual gradient descent step
