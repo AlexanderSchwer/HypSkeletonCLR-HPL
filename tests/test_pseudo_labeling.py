@@ -186,6 +186,62 @@ class PrototypePseudoLabelingTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             pseudo_label_mask_from_posteriors(torch.rand(4, 2), normalize_pseudo_mass=1)
 
+    def test_processor_geometry_model_arg_is_copied_into_model_args(self):
+        if not HAS_GEOOPT:
+            self.skipTest("geoopt is required to import the pretraining processor")
+        try:
+            from processor.pretrain_skeletonclr import SkeletonCLR_Processor
+        except ModuleNotFoundError as exc:
+            self.skipTest(f"processor dependency is not installed: {exc}")
+
+        processor = object.__new__(SkeletonCLR_Processor)
+        processor.arg = SimpleNamespace(
+            geometry_model="lorentz",
+            model_args={"curvature": 1.0},
+        )
+
+        processor._sync_geometry_model_args()
+
+        self.assertEqual(processor.arg.geometry_model, "lorentz")
+        self.assertEqual(processor.arg.model_args["geometry_model"], "lorentz")
+        self.assertEqual(processor.arg.model_args["curvature"], 1.0)
+
+    def test_processor_geometry_model_prefers_explicit_model_args_over_default(self):
+        if not HAS_GEOOPT:
+            self.skipTest("geoopt is required to import the pretraining processor")
+        try:
+            from processor.pretrain_skeletonclr import SkeletonCLR_Processor
+        except ModuleNotFoundError as exc:
+            self.skipTest(f"processor dependency is not installed: {exc}")
+
+        processor = object.__new__(SkeletonCLR_Processor)
+        processor.arg = SimpleNamespace(
+            geometry_model="poincare",
+            model_args={"geometry_model": "hyperboloid"},
+        )
+
+        processor._sync_geometry_model_args()
+
+        self.assertEqual(processor.arg.geometry_model, "lorentz")
+        self.assertEqual(processor.arg.model_args["geometry_model"], "lorentz")
+
+    def test_processor_rejects_conflicting_geometry_models(self):
+        if not HAS_GEOOPT:
+            self.skipTest("geoopt is required to import the pretraining processor")
+        try:
+            from processor.pretrain_skeletonclr import SkeletonCLR_Processor
+        except ModuleNotFoundError as exc:
+            self.skipTest(f"processor dependency is not installed: {exc}")
+
+        processor = object.__new__(SkeletonCLR_Processor)
+        processor.arg = SimpleNamespace(
+            geometry_model="lorentz",
+            model_args={"geometry_model": "poincare"},
+        )
+
+        with self.assertRaises(ValueError):
+            processor._sync_geometry_model_args()
+
     def test_processor_uses_selected_posterior_source_for_pseudo_supcon(self):
         if not HAS_GEOOPT:
             self.skipTest("geoopt is required to import the pretraining processor")

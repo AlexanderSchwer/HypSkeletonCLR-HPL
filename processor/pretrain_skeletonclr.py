@@ -74,14 +74,40 @@ class SkeletonCLR_Processor(PT_Processor):
                 self._wandb_ok = False
                 print(f"W&B disabled during init due to error: {exc}")
 
-        self.arg.geometry_model = normalize_geometry_model(
-            getattr(self.arg, "geometry_model", "poincare")
-        )
+        self._sync_geometry_model_args()
         self.criterion = SupConLoss(
             temperature=self.arg.temperature,
             curvature=self.arg.curvature,
             geometry_model=self.arg.geometry_model,
         )
+
+    def load_model(self):
+        self._sync_geometry_model_args()
+        super().load_model()
+
+    def _sync_geometry_model_args(self):
+        model_args = dict(getattr(self.arg, "model_args", {}) or {})
+        arg_geometry = getattr(self.arg, "geometry_model", None)
+        model_geometry = model_args.get("geometry_model", None)
+
+        if model_geometry is None:
+            geometry_model = normalize_geometry_model(arg_geometry)
+        else:
+            geometry_model = normalize_geometry_model(model_geometry)
+            if arg_geometry is not None:
+                normalized_arg_geometry = normalize_geometry_model(arg_geometry)
+                if (
+                    normalized_arg_geometry != geometry_model
+                    and normalized_arg_geometry != "poincare"
+                ):
+                    raise ValueError(
+                        "Conflicting geometry_model values: "
+                        f"processor={arg_geometry!r}, model_args={model_geometry!r}"
+                    )
+
+        self.arg.geometry_model = geometry_model
+        model_args["geometry_model"] = geometry_model
+        self.arg.model_args = model_args
 
     def start(self):
         try:
