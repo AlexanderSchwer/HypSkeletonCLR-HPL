@@ -185,10 +185,7 @@ package to be installed.
 
 The `slurm` folder contains private helper scripts used by the thesis author for
 specific cluster environments. They are kept in this repository for the author's
-own workflow and are not intended as a portable public SLURM interface. If you
-run the project on a different cluster, treat the scripts as examples and adapt
-the paths, modules, partitions, dataset locations, and sync commands to your
-environment.
+own workflow and are not intended as a portable public SLURM interface. 
 
 ## Tests
 
