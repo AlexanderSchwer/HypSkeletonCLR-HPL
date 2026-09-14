@@ -1,0 +1,15 @@
+{
+  "reference": "hypskeletonclr_ward",
+  "models": ["C", "H"],
+  "seed": 42,
+  "samples_per_class": 20,
+  "links_per_class": 5,
+  "tie_rtol": 0.000001,
+  "tie_atol": 0.00000001,
+  "label_space": "ntu60_one_based",
+  "subsets": [
+    {"name": "dressing_8", "title": "Dressing actions", "classes": [14, 15, 16, 17, 18, 19, 20, 21]},
+    {"name": "posture_6", "title": "Posture, jumping, and jacket actions", "classes": [8, 9, 14, 15, 27, 43]},
+    {"name": "face_health_6", "title": "Face care and health actions", "classes": [4, 37, 41, 44, 47, 48]}
+  ]
+}

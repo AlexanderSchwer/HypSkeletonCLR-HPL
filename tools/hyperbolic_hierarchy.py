@@ -4,6 +4,9 @@ import torch.nn.functional as F
 from tools.hyperbolic_geometry import make_hyperbolic_geometry
 
 
+HIERARCHY_OBJECTIVES = ("ranking_ce", "similarity_weighted")
+
+
 @torch.no_grad()
 def prototype_affinity_hyp(proto_h, curvature, temperature=1.0, geometry_model="poincare"):
     """
@@ -123,12 +126,26 @@ def hierarchy_triplet_loss_hyp(
     curvature,
     margin=0.05,
     geometry_model="poincare",
+    *,
+    objective="ranking_ce",
+    affinity=None,
 ):
     """
-    Hyperbolic hierarchical loss aligned with Sec. 3.2:
-    maximize root-distance of positive-pair LCA over negative-pair LCAs
-    with a softmax objective over (a,p), (a,n), (p,n).
+    Compare the three Gromov-product depths of each sampled triplet.
+
+    ranking_ce preserves the original implementation: cross-entropy with
+    (a,p) as target and a margin on (a,n) and (p,n). Its log-sum-exp form is
+    related to Sohn (2016), Eq. (3), with adapted scores and pair construction.
+
+    similarity_weighted uses the form of Long and van Noord (2023), Eq. (10),
+    retaining our depth proxy and sampling rather than reproducing all sHHC.
+    affinity must be the symmetric, zero-diagonal, globally normalized [K,K]
+    EMA matrix. Detached weights are multiplied by K*(K-1) to restore an
+    off-diagonal mean of one. No margin is used for this objective.
+    Both objectives return the mean over sampled triplets.
     """
+    if objective not in HIERARCHY_OBJECTIVES:
+        raise ValueError(f"Unknown hierarchy objective {objective!r}; expected {HIERARCHY_OBJECTIVES}")
     if triplets.numel() == 0:
         return proto_h.new_zeros(())
     if proto_h.dim() != 2:
@@ -146,12 +163,33 @@ def hierarchy_triplet_loss_hyp(
     pos = proto_h[positives]
     neg = proto_h[negatives]
 
-    # Similar pairs should share a deeper rooted ancestor than dissimilar pairs.
-    s_ap = _lca_depth_hyp(anc, pos, geometry)
-    s_an = _lca_depth_hyp(anc, neg, geometry) + margin
-    s_pn = _lca_depth_hyp(pos, neg, geometry) + margin
+    if objective == "ranking_ce":
+        # Keep the legacy operations, including their order, unchanged.
+        s_ap = _lca_depth_hyp(anc, pos, geometry)
+        s_an = _lca_depth_hyp(anc, neg, geometry) + margin
+        s_pn = _lca_depth_hyp(pos, neg, geometry) + margin
+        scores = torch.stack([s_ap, s_an, s_pn], dim=1)
+        target = torch.zeros(scores.shape[0], dtype=torch.long, device=scores.device)
+        return F.cross_entropy(scores, target)
 
-    scores = torch.stack([s_ap, s_an, s_pn], dim=1)
-    target = torch.zeros(scores.shape[0], dtype=torch.long, device=scores.device)
-    return F.cross_entropy(scores, target)
+    n_clusters = proto_h.shape[0]
+    if not isinstance(affinity, torch.Tensor) or affinity.shape != (n_clusters, n_clusters):
+        raise ValueError("similarity_weighted requires a [K, K] affinity tensor")
+    if not torch.is_floating_point(affinity) or not torch.isfinite(affinity).all():
+        raise ValueError("affinity must contain finite floating-point values")
+    if (affinity < 0).any():
+        raise ValueError("affinity must be non-negative")
+
+    affinity = affinity.detach().to(device=proto_h.device, dtype=proto_h.dtype)
+    weights = torch.stack(
+        [affinity[anchors, positives], affinity[anchors, negatives], affinity[positives, negatives]],
+        dim=1,
+    ) * (n_clusters * (n_clusters - 1))
+
+    scores = torch.stack([
+        _lca_depth_hyp(anc, pos, geometry),
+        _lca_depth_hyp(anc, neg, geometry),
+        _lca_depth_hyp(pos, neg, geometry),
+    ], dim=1)
+    return (weights.sum(dim=1) - (F.softmax(scores, dim=1) * weights).sum(dim=1)).mean()
 

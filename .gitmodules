@@ -1,3 +1,6 @@
 [submodule "slurm"]
 	path = slurm
 	url = https://github.com/AlexanderSchwer/HypSkeletonCLR-HPL-Slurm.git
+[submodule "tools/experiments"]
+	path = tools/experiments
+	url = https://github.com/AlexanderSchwer/HypSkeletonCLR-HPL-experiments.git

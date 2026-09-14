@@ -21,6 +21,7 @@ from .wandb_utils import init_wandb_from_work_dir
 
 from tools.losses import SupConLoss, pseudo_cluster_distance_floor_loss
 from tools.hyperbolic_hierarchy import (
+    HIERARCHY_OBJECTIVES,
     prototype_affinity_hyp,
     update_affinity_ema,
     sample_triplets_from_affinity,
@@ -51,6 +52,14 @@ class SkeletonCLR_Processor(PT_Processor):
         self.cluster_affinity = None
         self.contrastive_schedule = self._normalize_contrastive_schedule()
         self.arg.contrastive_schedule = self.contrastive_schedule
+        if self.arg.hier_objective not in HIERARCHY_OBJECTIVES:
+            raise ValueError(f"Unknown hierarchy objective: {self.arg.hier_objective!r}")
+        self.io.print_log(f"Hierarchy objective: {self.arg.hier_objective}")
+        if self.arg.hier_objective == "similarity_weighted":
+            self.io.print_log(
+                "Hierarchy uses scaled EMA affinity weights and Gromov-product depths; "
+                "hier_margin is unused. Calibrate lambda_hier separately for this objective."
+            )
         
         # Initialize wandb run
         self._wandb_ok = not self.arg.wandb_disabled
@@ -339,11 +348,12 @@ class SkeletonCLR_Processor(PT_Processor):
         parser.add_argument('--cluster_distance_log_interval', type=int, default=1, help='log cluster distance diagnostics every N epochs; 0 disables')
         parser.add_argument('--cluster_distance_matrix_max_clusters', type=int, default=20, help='maximum number of clusters for full inter-cluster distance matrix logging')
         parser.add_argument('--lambda_hier', type=float, default=0.1, help='maximum weight for hyperbolic hierarchy loss')
+        parser.add_argument('--hier_objective', default='ranking_ce', choices=HIERARCHY_OBJECTIVES, help='ranking_ce (legacy) or sHHC-inspired similarity_weighted hierarchy loss')
         parser.add_argument('--hier_update_interval', type=int, default=200, help='interval of iterations for hierarchy loss')
         parser.add_argument('--hier_warmup_steps', type=int, default=3000, help='warmup iterations before hierarchy loss')
         parser.add_argument('--hier_ramp_steps', type=int, default=2000, help='iterations used to ramp hierarchy loss weight')
         parser.add_argument('--hier_triplets', type=int, default=512, help='number of hierarchy triplets sampled each update')
-        parser.add_argument('--hier_margin', type=float, default=0.05, help='triplet margin for hierarchy loss')
+        parser.add_argument('--hier_margin', type=float, default=0.05, help='margin for ranking_ce hierarchy loss; unused by similarity_weighted')
         parser.add_argument('--affinity_momentum', type=float, default=0.9, help='EMA momentum for cluster affinity')
         parser.add_argument('--affinity_temperature', type=float, default=1.0, help='temperature for prototype affinity')
         parser.add_argument('--lambda_aug', type=float, default=1.0, help='positive weight for augmentation pairs in SupCon modes')
@@ -438,6 +448,8 @@ class SkeletonCLR_Processor(PT_Processor):
                     curvature=self.arg.curvature,
                     margin=self.arg.hier_margin,
                     geometry_model=self.arg.geometry_model,
+                    objective=self.arg.hier_objective,
+                    affinity=self.cluster_affinity,
                 )
                 hierarchy_triplet_accuracy = self._hierarchy_triplet_accuracy(
                     proto_h, triplets
