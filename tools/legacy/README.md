@@ -1,3 +1,3 @@
 Legacy tools kept for reference.
 
-The active thesis utilities remain directly under `tools`.
+The active utilities remain directly under `tools`.

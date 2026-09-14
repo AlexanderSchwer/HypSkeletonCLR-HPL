@@ -1,0 +1,34 @@
+{
+  "data_path": "data/NTU-RGB-D/xview/val_position.npy",
+  "label_path": "data/NTU-RGB-D/xview/val_label.pkl",
+  "output_dir": "work_dir/hierarchy_eval/xview_k40",
+  "device": "cpu",
+  "expected_device_name": "CPU",
+  "seed": 42,
+  "samples_per_class": 20,
+  "projection_samples_per_class": 5,
+  "batch_size": 32,
+  "models": [
+    {
+      "name": "baseline",
+      "title": "Baseline",
+      "run_dir": "work_dir/checkpoints/baseline",
+      "lambda_hier": 0.0,
+      "lambda_sink": 0.0
+    },
+    {
+      "name": "C",
+      "title": "C: clustering",
+      "run_dir": "work_dir/checkpoints/clustering",
+      "lambda_hier": 0.0,
+      "lambda_sink": 1.0
+    },
+    {
+      "name": "H",
+      "title": "H: clustering + hierarchy",
+      "run_dir": "work_dir/checkpoints/hierarchy",
+      "lambda_hier": 0.2,
+      "lambda_sink": 1.0
+    }
+  ]
+}

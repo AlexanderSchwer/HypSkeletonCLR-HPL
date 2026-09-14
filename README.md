@@ -10,7 +10,7 @@ plots for NTU RGB+D skeleton data.
 The original CrosSCLR code and experiment configs are still present where useful,
 but older experiment files have been moved under `config/legacy`.
 
-The short name follows the thesis contribution naming: `C` denotes balanced
+The variant names describe the enabled components: `C` denotes balanced
 cluster/prototype assignment, `H` denotes the hierarchy-aware prototype
 objective, `PL` denotes cluster-derived pseudo-label feedback, and
 `HypSkeletonCLR-HPL` denotes the combined variant.
@@ -33,7 +33,8 @@ objective, `PL` denotes cluster-derived pseudo-label feedback, and
 - `tools` contains NTU conversion, hyperbolic geometry, hierarchy utilities,
   pseudo-labeling, losses, and embedding diagnostics.
 - `torchlight` is the local helper package used by the processors.
-- `slurm` contains private cluster helper scripts used by the thesis author.
+- `slurm` and `tools/experiments` are optional private submodules for cluster
+  jobs and additional evaluation scripts; access to their repositories is required.
 - `tests` contains unit tests for hierarchy, pseudo-labeling, embedding
   diagnostics, and work-directory behavior.
 
@@ -186,6 +187,10 @@ package to be installed.
 The `slurm` folder contains private helper scripts used by the thesis author for
 specific cluster environments. They are kept in this repository for the author's
 own workflow and are not intended as a portable public SLURM interface. 
+
+## Optional Evaluation Scripts
+
+With access to the private experiments repository, initialize its submodule.
 
 ## Tests
 

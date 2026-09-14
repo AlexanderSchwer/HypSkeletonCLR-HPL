@@ -1,4 +1,4 @@
-Legacy configs are kept here for reproducing older experiments without keeping them in the active thesis config tree.
+Legacy configs are kept here for reproducing older experiments separately from the active configurations.
 
-Current thesis-facing SkeletonCLR configs remain in `config/SkeletonCLR`.
+Current SkeletonCLR configs remain in `config/SkeletonCLR`.
 Linear evaluation and plotting configs that are still used by the slurm scripts remain at top level; unused variants live here.
